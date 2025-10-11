@@ -32,11 +32,19 @@ function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
   const programs: EPGProgram[] = [];
   const now = new Date();
   
+  // Create a map of channel IDs for quick lookup
+  const channelMap = new Map<string, string>();
+  channels.forEach(ch => {
+    channelMap.set(ch.id, ch.name);
+    channelMap.set(ch.name.toLowerCase(), ch.name);
+  });
+  
   try {
     // Simple XML parsing for programme tags
     const programmeRegex = /<programme[^>]*>([\s\S]*?)<\/programme>/g;
     const matches = xmlData.matchAll(programmeRegex);
     
+    let count = 0;
     for (const match of matches) {
       const programmeXml = match[0];
       
@@ -61,16 +69,22 @@ function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
         
         // Only include current and upcoming programs
         if (endTime > now) {
+          const channelId = channelMatch[1];
+          const channelName = channelMap.get(channelId) || channelMap.get(channelId.toLowerCase()) || channelId;
+          
           programs.push({
-            id: `${channelMatch[1]}-${startMatch[1]}`,
+            id: `${channelId}-${startMatch[1]}`,
             title: titleMatch[1],
             description: descMatch ? descMatch[1] : '',
             start: startTime.toISOString(),
             end: endTime.toISOString(),
-            channel: channelMatch[1],
+            channel: channelName,
             category: categoryMatch ? categoryMatch[1] : 'Général',
             isLive: isLive,
           });
+          
+          count++;
+          if (count >= 2000) break; // Increase limit to 2000 programs
         }
       }
     }
@@ -78,7 +92,7 @@ function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
     console.error('Error parsing EPG:', error);
   }
   
-  return programs.slice(0, 500); // Limit to 500 programs
+  return programs;
 }
 
 // Parse EPG date format (YYYYMMDDHHMMSS +TZTZ)
@@ -136,17 +150,33 @@ serve(async (req) => {
 
     console.log(`Filtered to ${relevantChannels.length} relevant channels`);
 
-    // Fetch EPG data from IPTV-org
+    // Fetch EPG data from multiple sources
     let programs: EPGProgram[] = [];
     try {
-      const epgResponse = await fetch('https://iptv-org.github.io/epg/guides/fr/programme-tv.com.epg.xml');
-      if (epgResponse.ok) {
-        const epgXml = await epgResponse.text();
-        programs = parseEPG(epgXml, relevantChannels);
-        console.log(`Parsed ${programs.length} EPG programs`);
+      console.log('Fetching EPG data...');
+      const epgSources = [
+        'https://iptv-org.github.io/epg/guides/fr/programme-tv.com.epg.xml',
+        'https://iptv-org.github.io/epg/guides/fr/telerama.fr.epg.xml',
+      ];
+      
+      for (const epgUrl of epgSources) {
+        try {
+          console.log(`Trying EPG source: ${epgUrl}`);
+          const epgResponse = await fetch(epgUrl);
+          if (epgResponse.ok) {
+            const epgXml = await epgResponse.text();
+            const newPrograms = parseEPG(epgXml, relevantChannels);
+            programs.push(...newPrograms);
+            console.log(`Parsed ${newPrograms.length} programs from ${epgUrl}`);
+          }
+        } catch (sourceError) {
+          console.warn(`Failed to fetch from ${epgUrl}:`, sourceError);
+        }
       }
+      
+      console.log(`Total EPG programs parsed: ${programs.length}`);
     } catch (epgError) {
-      console.warn('Could not fetch EPG data:', epgError);
+      console.error('Error fetching EPG data:', epgError);
     }
 
     // Group channels by category
