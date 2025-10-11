@@ -106,7 +106,8 @@ export function useEPGParser() {
 
         channelProgramCount.set(channelIdLower, (channelProgramCount.get(channelIdLower) || 0) + 1);
 
-        if (parsedPrograms.length >= 1000) break;
+        // Limit total programs to avoid performance issues
+        if (parsedPrograms.length >= 5000) break;
       }
 
       console.log(`Parsed ${parsedPrograms.length} programs`);

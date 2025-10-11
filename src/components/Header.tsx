@@ -1,6 +1,8 @@
-import { Search, Heart, Tv } from 'lucide-react';
+import { Search, Heart, Tv, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
 
 interface HeaderProps {
   searchQuery: string;
@@ -10,6 +12,38 @@ interface HeaderProps {
 }
 
 export const Header = ({ searchQuery, onSearchChange, favoritesCount, onReloadEPG }: HeaderProps) => {
+  const [isUpdating, setIsUpdating] = useState(false);
+  const { toast } = useToast();
+
+  const handleReloadEPG = async () => {
+    if (!onReloadEPG) return;
+    
+    setIsUpdating(true);
+    toast({
+      title: "Rechargement EPG",
+      description: "Téléchargement et parsing en cours...",
+    });
+
+    try {
+      // Clear cache to force fresh download
+      localStorage.removeItem('epg-cache');
+      await onReloadEPG();
+      
+      toast({
+        title: "Succès",
+        description: "EPG rechargé avec succès !",
+      });
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: "Échec du rechargement EPG",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border">
@@ -38,6 +72,18 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount, onReloadEP
           </div>
 
           <div className="flex items-center gap-2">
+            {onReloadEPG && (
+              <Button
+                onClick={handleReloadEPG}
+                disabled={isUpdating}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
+                {isUpdating ? 'Mise à jour...' : 'MAJ EPG'}
+              </Button>
+            )}
 
             <button className="relative p-2 rounded-lg hover:bg-card transition-colors">
               <Heart className="w-6 h-6 text-foreground" />
