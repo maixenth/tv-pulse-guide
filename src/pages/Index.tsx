@@ -6,7 +6,6 @@ import { ProgramDialog } from '@/components/ProgramDialog';
 import { ChannelSelector } from '@/components/ChannelSelector';
 import { DateFilter } from '@/components/DateFilter';
 import { Stats } from '@/components/Stats';
-import { mockPrograms, channels } from '@/data/mockPrograms';
 import { Program, ProgramCategory } from '@/types/program';
 import { useIPTVChannels } from '@/hooks/useIPTVChannels';
 import { toast } from 'sonner';
@@ -37,13 +36,13 @@ const Index = () => {
 
   useEffect(() => {
     if (error) {
-      toast.error('Erreur lors du chargement des chaînes TV', {
-        description: 'Utilisation des données de démonstration'
-      });
+      toast.error('Erreur lors du chargement des chaînes TV');
     } else if (iptvData) {
-      toast.success(`${iptvData.totalChannels} chaînes TV chargées !`, {
-        description: 'Données en temps réel disponibles'
-      });
+      if (iptvData.totalChannels === 0) {
+        toast.warning('Aucune chaîne avec EPG disponible pour le moment');
+      } else {
+        toast.success(`${iptvData.totalChannels} chaînes avec EPG chargées !`);
+      }
     }
   }, [iptvData, error]);
 
@@ -53,7 +52,7 @@ const Index = () => {
       const uniqueChannels = Array.from(new Set(iptvData.channels.map(ch => ch.name))).sort();
       return uniqueChannels;
     }
-    return channels;
+    return [];
   }, [iptvData]);
 
   const categories: ProgramCategory[] = [
@@ -66,10 +65,10 @@ const Index = () => {
     'Enfants',
   ];
 
-  // Convert EPG programs to our Program format
+  // Convert EPG programs to our Program format - NO FALLBACK TO MOCK DATA
   const programs = useMemo(() => {
     if (!iptvData?.programs || iptvData.programs.length === 0) {
-      return mockPrograms; // Fallback to mock data if no EPG data
+      return []; // Return empty array if no real EPG data
     }
     
     return iptvData.programs.map(epgProgram => ({
