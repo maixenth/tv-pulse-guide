@@ -1,5 +1,9 @@
-import { Search, Heart, Tv } from 'lucide-react';
+import { Search, Heart, Tv, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 interface HeaderProps {
   searchQuery: string;
@@ -8,6 +12,40 @@ interface HeaderProps {
 }
 
 export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderProps) => {
+  const [isUpdating, setIsUpdating] = useState(false);
+  const { toast } = useToast();
+
+  const handleUpdateEPG = async () => {
+    setIsUpdating(true);
+    toast({
+      title: "Mise à jour EPG",
+      description: "Démarrage de la mise à jour des programmes...",
+    });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('update-epg');
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: `${data.total_programs} programmes mis à jour avec succès !`,
+      });
+      
+      // Reload the page to fetch new EPG data
+      setTimeout(() => window.location.reload(), 1000);
+    } catch (error) {
+      console.error('Error updating EPG:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre à jour les programmes. Réessayez plus tard.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border">
       <div className="container mx-auto px-4 py-4">
@@ -34,14 +72,27 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderPr
             </div>
           </div>
 
-          <button className="relative p-2 rounded-lg hover:bg-card transition-colors">
-            <Heart className="w-6 h-6 text-foreground" />
-            {favoritesCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-br from-primary to-secondary rounded-full text-xs flex items-center justify-center text-white font-semibold">
-                {favoritesCount}
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleUpdateEPG}
+              disabled={isUpdating}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
+              {isUpdating ? 'Mise à jour...' : 'MAJ EPG'}
+            </Button>
+
+            <button className="relative p-2 rounded-lg hover:bg-card transition-colors">
+              <Heart className="w-6 h-6 text-foreground" />
+              {favoritesCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-br from-primary to-secondary rounded-full text-xs flex items-center justify-center text-white font-semibold">
+                  {favoritesCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </header>
