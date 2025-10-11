@@ -27,10 +27,11 @@ interface EPGProgram {
   isLive: boolean;
 }
 
-// Parse EPG XML data
+// Parse EPG XML data - optimized for memory efficiency
 function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
   const programs: EPGProgram[] = [];
   const now = new Date();
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Next 24 hours only
   
   // Create a map of channel IDs for quick lookup
   const channelMap = new Map<string, string>();
@@ -40,12 +41,14 @@ function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
   });
   
   try {
-    // Simple XML parsing for programme tags
+    // Simple XML parsing for programme tags - process in chunks
     const programmeRegex = /<programme[^>]*>([\s\S]*?)<\/programme>/g;
-    const matches = xmlData.matchAll(programmeRegex);
     
     let count = 0;
-    for (const match of matches) {
+    let match;
+    
+    // Process matches one by one to avoid storing all in memory
+    while ((match = programmeRegex.exec(xmlData)) !== null && count < 500) {
       const programmeXml = match[0];
       
       // Extract attributes
@@ -53,8 +56,21 @@ function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
       const endMatch = programmeXml.match(/stop="([^"]+)"/);
       const channelMatch = programmeXml.match(/channel="([^"]+)"/);
       
+      if (!startMatch || !endMatch || !channelMatch) continue;
+      
+      const startTime = parseEPGDate(startMatch[1]);
+      const endTime = parseEPGDate(endMatch[1]);
+      
+      // Only process programs within next 24 hours
+      if (endTime < now || startTime > tomorrow) continue;
+      
       // Extract title
       const titleMatch = programmeXml.match(/<title[^>]*>([^<]+)<\/title>/);
+      if (!titleMatch) continue;
+      
+      const isLive = now >= startTime && now <= endTime;
+      const channelId = channelMatch[1];
+      const channelName = channelMap.get(channelId) || channelMap.get(channelId.toLowerCase()) || channelId;
       
       // Extract description
       const descMatch = programmeXml.match(/<desc[^>]*>([^<]+)<\/desc>/);
@@ -62,32 +78,21 @@ function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
       // Extract category
       const categoryMatch = programmeXml.match(/<category[^>]*>([^<]+)<\/category>/);
       
-      if (startMatch && endMatch && channelMatch && titleMatch) {
-        const startTime = parseEPGDate(startMatch[1]);
-        const endTime = parseEPGDate(endMatch[1]);
-        const isLive = now >= startTime && now <= endTime;
-        
-        // Only include current and upcoming programs
-        if (endTime > now) {
-          const channelId = channelMatch[1];
-          const channelName = channelMap.get(channelId) || channelMap.get(channelId.toLowerCase()) || channelId;
-          
-          programs.push({
-            id: `${channelId}-${startMatch[1]}`,
-            title: titleMatch[1],
-            description: descMatch ? descMatch[1] : '',
-            start: startTime.toISOString(),
-            end: endTime.toISOString(),
-            channel: channelName,
-            category: categoryMatch ? categoryMatch[1] : 'Général',
-            isLive: isLive,
-          });
-          
-          count++;
-          if (count >= 2000) break; // Increase limit to 2000 programs
-        }
-      }
+      programs.push({
+        id: `${channelId}-${startMatch[1]}`,
+        title: titleMatch[1],
+        description: descMatch ? descMatch[1] : '',
+        start: startTime.toISOString(),
+        end: endTime.toISOString(),
+        channel: channelName,
+        category: categoryMatch ? categoryMatch[1] : 'Général',
+        isLive: isLive,
+      });
+      
+      count++;
     }
+    
+    console.log(`Parsed ${count} programs within next 24 hours`);
   } catch (error) {
     console.error('Error parsing EPG:', error);
   }
