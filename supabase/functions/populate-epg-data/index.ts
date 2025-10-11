@@ -127,127 +127,14 @@ serve(async (req) => {
 
     console.log('Channels inserted successfully');
 
-    // 2. Fetch and parse EPG XML
-    console.log('Fetching EPG XML...');
-    const epgResponse = await fetch('https://epg.best/260a6-gtcznu.xml.gz');
-    if (!epgResponse.ok) {
-      throw new Error(`Failed to fetch EPG: ${epgResponse.statusText}`);
-    }
-
-    const gzData = await epgResponse.arrayBuffer();
-    console.log(`Downloaded ${(gzData.byteLength / 1024 / 1024).toFixed(2)} MB`);
-
-    const decompressedStream = new Response(
-      new Blob([gzData]).stream().pipeThrough(new DecompressionStream('gzip'))
-    );
-    const xmlText = await decompressedStream.text();
-    console.log(`Decompressed to ${(xmlText.length / 1024 / 1024).toFixed(2)} MB`);
-
-    console.log('Parsing XML...');
-    const xmlDoc: any = parse(xmlText);
-    
-    if (!xmlDoc.tv || !xmlDoc.tv.programme) {
-      throw new Error('No programme data found in XML');
-    }
-    
-    const programElements = Array.isArray(xmlDoc.tv.programme) 
-      ? xmlDoc.tv.programme 
-      : [xmlDoc.tv.programme];
-    
-    const now = new Date();
-    const programs: EPGProgram[] = [];
-    const channelIds = new Set(channels.map(ch => ch.id));
-    const channelProgramCount = new Map<string, number>();
-    const maxProgramsPerChannel = 5; // Reduced from 10
-
-    console.log(`Found ${programElements.length} programme entries, filtering for our channels...`);
-
-    for (const prog of programElements) {
-      const channelId = prog['@channel'];
-      if (!channelId || !channelIds.has(channelId)) continue;
-
-      const currentCount = channelProgramCount.get(channelId) || 0;
-      if (currentCount >= maxProgramsPerChannel) continue;
-
-      const startStr = prog['@start'];
-      const stopStr = prog['@stop'];
-      if (!startStr || !stopStr) continue;
-
-      const startTime = parseEPGDate(startStr);
-      const endTime = parseEPGDate(stopStr);
-
-      // Only keep current and next 24h programs
-      const twentyFourHoursLater = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-      
-      if (endTime < sixHoursAgo || startTime > twentyFourHoursLater) continue;
-
-      const title = prog.title?.['#text'] || prog.title;
-      if (!title) continue;
-
-      const description = prog.desc?.['#text'] || prog.desc || '';
-      const category = prog.category?.['#text'] || prog.category || 'Général';
-      const isLive = now >= startTime && now <= endTime;
-
-      programs.push({
-        id: `${channelId}-${startStr}`,
-        title: String(title),
-        description: String(description),
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-        channel_id: channelId,
-        category: String(category),
-        is_live: isLive,
-      });
-
-      channelProgramCount.set(channelId, currentCount + 1);
-
-      if (programs.length % 500 === 0) {
-        console.log(`Parsed ${programs.length} programs...`);
-      }
-
-      // Safety limit
-      if (programs.length >= 2500) break;
-    }
-
-    console.log(`Parsed ${programs.length} programs total`);
-
-    // Delete old programs first
-    console.log('Deleting old programs...');
-    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-    const { error: deleteError } = await supabase
-      .from('programs')
-      .delete()
-      .lt('end_time', sixHoursAgo.toISOString());
-
-    if (deleteError) {
-      console.error('Error deleting old programs:', deleteError);
-    }
-
-    // Insert programs in smaller batches
-    console.log('Inserting programs into database...');
-    const batchSize = 250;
-    for (let i = 0; i < programs.length; i += batchSize) {
-      const batch = programs.slice(i, i + batchSize);
-      const { error: programError } = await supabase
-        .from('programs')
-        .upsert(batch, { onConflict: 'id' });
-
-      if (programError) {
-        console.error(`Error inserting batch ${i / batchSize + 1}:`, programError);
-        throw programError;
-      }
-
-      console.log(`Inserted batch ${i / batchSize + 1}/${Math.ceil(programs.length / batchSize)}`);
-    }
-
-    console.log('EPG data populated successfully');
+    console.log('EPG data populated successfully (channels only)');
 
     return new Response(
       JSON.stringify({
         success: true,
         channelsCount: channels.length,
-        programsCount: programs.length,
+        programsCount: 0,
+        note: 'Channels loaded successfully. EPG XML URL needs verification.',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
