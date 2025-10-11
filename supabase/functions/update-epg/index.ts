@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { parse } from "https://deno.land/x/xml@2.1.3/mod.ts";
-import { decompress } from "https://deno.land/x/zip@v1.2.5/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,43 +43,23 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch EPG XML ZIP (using TNT France which is much smaller - 0.82 MB)
-    console.log('Fetching EPG XML ZIP from xmltvfr.fr (TNT France)...');
-    const epgResponse = await fetch('https://xmltvfr.fr/xmltv/xmltv_tnt.zip');
+    // Fetch compressed EPG file (.gz version - 0.83 MB)
+    console.log('Fetching EPG XML.GZ from xmltvfr.fr (TNT France)...');
+    const epgResponse = await fetch('https://xmltvfr.fr/xmltv/xmltv_tnt.xml.gz');
     
     if (!epgResponse.ok) {
       throw new Error(`Failed to fetch EPG: ${epgResponse.status}`);
     }
 
-    // Get ZIP data as ArrayBuffer
-    const zipData = await epgResponse.arrayBuffer();
-    console.log(`ZIP size: ${zipData.byteLength} bytes`);
+    // Get gzipped data and decompress using native DecompressionStream
+    const gzData = await epgResponse.arrayBuffer();
+    console.log(`GZ size: ${gzData.byteLength} bytes`);
     
-    // Extract XML from ZIP
-    console.log('Extracting XML from ZIP...');
-    const zipBytes = new Uint8Array(zipData);
-    const tempZipPath = '/tmp/epg.zip';
-    const tempExtractPath = '/tmp/extracted';
-    
-    // Write ZIP file
-    await Deno.writeFile(tempZipPath, zipBytes);
-    
-    // Decompress using deno.land/x/zip
-    await decompress(tempZipPath, tempExtractPath);
-    
-    // Find the XML file in extracted directory
-    const files = [];
-    for await (const entry of Deno.readDir(tempExtractPath)) {
-      if (entry.name.endsWith('.xml')) {
-        files.push(entry.name);
-      }
-    }
-    
-    if (files.length === 0) {
-      throw new Error('No XML file found in ZIP');
-    }
-    
-    const xmlText = await Deno.readTextFile(`${tempExtractPath}/${files[0]}`);
+    console.log('Decompressing XML.GZ...');
+    const decompressedStream = new Response(
+      new Blob([gzData]).stream().pipeThrough(new DecompressionStream('gzip'))
+    );
+    const xmlText = await decompressedStream.text();
     console.log(`EPG XML size: ${xmlText.length} bytes`);
 
     // Parse XML to JSON
