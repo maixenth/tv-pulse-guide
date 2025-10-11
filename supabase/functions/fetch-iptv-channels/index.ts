@@ -102,25 +102,32 @@ serve(async (req) => {
       }
     });
 
-    // Filter for francophone, African, and sports channels
+    // Filter STRICTLY for francophone and African channels only
     const relevantChannels = allChannelsData
       .filter((channel: any) => {
-        const hasRelevantLanguage = channel.languages?.some((lang: string) => 
-          ['fra', 'fre', 'ar', 'eng'].includes(lang.toLowerCase())
+        // Strict francophone language filter
+        const isFrancophone = channel.languages?.some((lang: string) => 
+          ['fra', 'fre'].includes(lang.toLowerCase())
         );
         
-        const hasRelevantCountry = channel.country && [
-          'fr', 'be', 'ch', 'ca', 'dz', 'ma', 'tn', 'sn', 'ci', 'cm', 'cd', 
-          'bf', 'ml', 'ne', 'tg', 'bj', 'gn', 'rw', 'bi', 'td', 'cf', 'ga',
-          'cg', 'mg', 'km', 'sc', 'mu', 'dj', 'za', 'ng', 'ke', 'gh', 'ug',
-          'tz', 'et', 'zw', 'zm', 'mw', 'ao', 'mz', 'na', 'bw', 'ls', 'sz'
+        // Strict francophone + African countries only
+        const isRelevantCountry = channel.country && [
+          // France, Belgium, Switzerland, Canada (francophone regions)
+          'fr', 'be', 'ch', 'ca',
+          // Maghreb (francophone)
+          'dz', 'ma', 'tn',
+          // West Africa (francophone)
+          'sn', 'ci', 'cm', 'bf', 'ml', 'ne', 'tg', 'bj', 'gn',
+          // Central Africa (francophone)
+          'cd', 'cg', 'ga', 'cf', 'td',
+          // East Africa (francophone)
+          'rw', 'bi', 'dj',
+          // Indian Ocean (francophone)
+          'mg', 'km', 'sc', 'mu'
         ].includes(channel.country.toLowerCase());
 
-        const hasSportsCategory = channel.categories?.some((cat: string) => 
-          cat.toLowerCase().includes('sport')
-        );
-
-        return (hasRelevantLanguage || hasRelevantCountry || hasSportsCategory) && streamMap.has(channel.id);
+        // Always include if francophone OR from relevant country OR has stream
+        return (isFrancophone || isRelevantCountry) && streamMap.has(channel.id);
       })
       .map((channel: any) => ({
         id: channel.id,
