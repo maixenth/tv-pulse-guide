@@ -61,9 +61,10 @@ serve(async (req) => {
 
     const m3uText = await m3uResponse.text();
     const lines = m3uText.split('\n');
-    const channels: Channel[] = [];
+    const allChannels: Channel[] = [];
     let currentChannel: Partial<Channel> | null = null;
 
+    // Parse M3U
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       
@@ -75,7 +76,7 @@ serve(async (req) => {
         const nameMatch = line.split(',').pop();
         
         currentChannel = {
-          id: tvgIdMatch?.[1] || `ch-${channels.length}`,
+          id: tvgIdMatch?.[1] || `ch-${allChannels.length}`,
           name: nameMatch?.trim() || tvgNameMatch?.[1] || 'Unknown',
           logo: tvgLogoMatch?.[1] || 'https://via.placeholder.com/150?text=No+Logo',
           country: '',
@@ -85,12 +86,33 @@ serve(async (req) => {
         };
       } else if (line && !line.startsWith('#') && currentChannel) {
         currentChannel.url = line;
-        channels.push(currentChannel as Channel);
+        allChannels.push(currentChannel as Channel);
         currentChannel = null;
       }
     }
 
-    console.log(`Parsed ${channels.length} channels`);
+    console.log(`Parsed ${allChannels.length} total channels`);
+
+    // Filter for French channels only to reduce load
+    const channels = allChannels.filter(ch => {
+      const nameLower = ch.name.toLowerCase();
+      const categoryLower = ch.categories.join(' ').toLowerCase();
+      
+      // Keep French, Belgian, Swiss, African francophone channels
+      return (
+        nameLower.includes('fr') || 
+        nameLower.includes('france') ||
+        nameLower.includes('tf1') ||
+        nameLower.includes('m6') ||
+        nameLower.includes('arte') ||
+        nameLower.includes('canal') ||
+        categoryLower.includes('french') ||
+        categoryLower.includes('france') ||
+        categoryLower.includes('français')
+      );
+    }).slice(0, 500); // Limit to 500 channels max
+
+    console.log(`Filtered to ${channels.length} French channels`);
 
     // Insert channels into database
     console.log('Inserting channels into database...');
@@ -134,12 +156,18 @@ serve(async (req) => {
     
     const now = new Date();
     const programs: EPGProgram[] = [];
+    const channelIds = new Set(channels.map(ch => ch.id));
+    const channelProgramCount = new Map<string, number>();
+    const maxProgramsPerChannel = 5; // Reduced from 10
 
-    console.log(`Found ${programElements.length} programme entries, parsing...`);
+    console.log(`Found ${programElements.length} programme entries, filtering for our channels...`);
 
     for (const prog of programElements) {
       const channelId = prog['@channel'];
-      if (!channelId) continue;
+      if (!channelId || !channelIds.has(channelId)) continue;
+
+      const currentCount = channelProgramCount.get(channelId) || 0;
+      if (currentCount >= maxProgramsPerChannel) continue;
 
       const startStr = prog['@start'];
       const stopStr = prog['@stop'];
@@ -148,11 +176,11 @@ serve(async (req) => {
       const startTime = parseEPGDate(startStr);
       const endTime = parseEPGDate(stopStr);
 
-      // Only keep current and future programs (last 12h to next 7 days)
-      const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
-      const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      // Only keep current and next 24h programs
+      const twentyFourHoursLater = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+      const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
       
-      if (endTime < twelveHoursAgo || startTime > sevenDaysLater) continue;
+      if (endTime < sixHoursAgo || startTime > twentyFourHoursLater) continue;
 
       const title = prog.title?.['#text'] || prog.title;
       if (!title) continue;
@@ -172,28 +200,33 @@ serve(async (req) => {
         is_live: isLive,
       });
 
-      if (programs.length % 1000 === 0) {
+      channelProgramCount.set(channelId, currentCount + 1);
+
+      if (programs.length % 500 === 0) {
         console.log(`Parsed ${programs.length} programs...`);
       }
+
+      // Safety limit
+      if (programs.length >= 2500) break;
     }
 
     console.log(`Parsed ${programs.length} programs total`);
 
     // Delete old programs first
     console.log('Deleting old programs...');
-    const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
     const { error: deleteError } = await supabase
       .from('programs')
       .delete()
-      .lt('end_time', twelveHoursAgo.toISOString());
+      .lt('end_time', sixHoursAgo.toISOString());
 
     if (deleteError) {
       console.error('Error deleting old programs:', deleteError);
     }
 
-    // Insert programs in batches
+    // Insert programs in smaller batches
     console.log('Inserting programs into database...');
-    const batchSize = 500;
+    const batchSize = 250;
     for (let i = 0; i < programs.length; i += batchSize) {
       const batch = programs.slice(i, i + batchSize);
       const { error: programError } = await supabase
