@@ -87,7 +87,7 @@ const Index = () => {
       startTime: new Date(epgProgram.start).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       endTime: new Date(epgProgram.end).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       description: epgProgram.description,
-      image: 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=800&h=450&fit=crop',
+      image: '',
       isLive: epgProgram.isLive,
       duration: Math.round((new Date(epgProgram.end).getTime() - new Date(epgProgram.start).getTime()) / 60000),
     }));
