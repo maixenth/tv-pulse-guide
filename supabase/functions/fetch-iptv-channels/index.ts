@@ -206,9 +206,9 @@ serve(async (req) => {
       channelNamesForEPG.add(ch.name.toLowerCase());
     });
 
-    // Fetch real EPG data from xmltvfr.fr
+    // Fetch real EPG data from xmltvfr.fr (TNT only - much smaller file)
     const programs = await parseEPGFromURL(
-      'https://xmltvfr.fr/xmltv/xmltv.xml',
+      'https://xmltvfr.fr/xmltv/tnt.xml',
       channelNamesForEPG
     );
     console.log(`Got ${programs.length} real EPG programs`);
