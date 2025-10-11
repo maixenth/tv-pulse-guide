@@ -127,21 +127,21 @@ serve(async (req) => {
 
     console.log('Channels inserted successfully');
 
-    // 2. Fetch and parse EPG XML from epg.pw
-    console.log('Fetching EPG XML from epg.pw...');
-    const epgResponse = await fetch('https://epg.pw/xmltv/epg_FR.xml.gz');
+    // 2. Fetch and parse EPG XML from xmltvfr.fr (TNT France - much smaller file)
+    console.log('Fetching EPG XML from xmltvfr.fr (TNT France)...');
+    const epgResponse = await fetch('https://xmltvfr.fr/xmltv/xmltv_tnt.xml.gz');
     if (!epgResponse.ok) {
       throw new Error(`Failed to fetch EPG: ${epgResponse.statusText}`);
     }
 
     const gzData = await epgResponse.arrayBuffer();
-    console.log(`Downloaded ${(gzData.byteLength / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`Downloaded ${(gzData.byteLength / 1024).toFixed(2)} KB`);
 
     const decompressedStream = new Response(
       new Blob([gzData]).stream().pipeThrough(new DecompressionStream('gzip'))
     );
     const xmlText = await decompressedStream.text();
-    console.log(`Decompressed to ${(xmlText.length / 1024 / 1024).toFixed(2)} MB`);
+    console.log(`Decompressed to ${(xmlText.length / 1024).toFixed(2)} KB`);
 
     console.log('Parsing XML...');
     const xmlDoc: any = parse(xmlText);
@@ -156,15 +156,14 @@ serve(async (req) => {
     
     const now = new Date();
     const programs: EPGProgram[] = [];
-    const channelIds = new Set(channels.map(ch => ch.id));
     const channelProgramCount = new Map<string, number>();
-    const maxProgramsPerChannel = 10;
+    const maxProgramsPerChannel = 20; // More programs per channel for TNT
 
-    console.log(`Found ${programElements.length} programme entries, filtering for our channels...`);
+    console.log(`Found ${programElements.length} programme entries from TNT France...`);
 
     for (const prog of programElements) {
       const channelId = prog['@channel'];
-      if (!channelId || !channelIds.has(channelId)) continue;
+      if (!channelId) continue;
 
       const currentCount = channelProgramCount.get(channelId) || 0;
       if (currentCount >= maxProgramsPerChannel) continue;
@@ -176,11 +175,8 @@ serve(async (req) => {
       const startTime = parseEPGDate(startStr);
       const endTime = parseEPGDate(stopStr);
 
-      // Only keep current and next 48h programs
-      const fortyEightHoursLater = new Date(now.getTime() + 48 * 60 * 60 * 1000);
-      const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
-      
-      if (endTime < sixHoursAgo || startTime > fortyEightHoursLater) continue;
+      // Only keep current and upcoming programs (not past)
+      if (endTime < now) continue;
 
       const title = prog.title?.['#text'] || prog.title;
       if (!title) continue;
@@ -201,13 +197,6 @@ serve(async (req) => {
       });
 
       channelProgramCount.set(channelId, currentCount + 1);
-
-      if (programs.length % 500 === 0) {
-        console.log(`Parsed ${programs.length} programs...`);
-      }
-
-      // Safety limit
-      if (programs.length >= 5000) break;
     }
 
     console.log(`Parsed ${programs.length} programs total`);
@@ -241,14 +230,14 @@ serve(async (req) => {
       console.log(`Inserted batch ${i / batchSize + 1}/${Math.ceil(programs.length / batchSize)}`);
     }
 
-    console.log('EPG data populated successfully from epg.pw');
+    console.log('EPG data populated successfully from xmltvfr.fr');
 
     return new Response(
       JSON.stringify({
         success: true,
         channelsCount: channels.length,
         programsCount: programs.length,
-        source: 'epg.pw (France)',
+        source: 'xmltvfr.fr (TNT France)',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
