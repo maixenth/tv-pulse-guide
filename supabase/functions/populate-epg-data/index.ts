@@ -203,16 +203,15 @@ serve(async (req) => {
 
       console.log(`Parsed ${programs.length} programs total`);
 
-      // Delete old programs first
-      console.log('Deleting old programs...');
-      const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+      // Delete ALL existing programs first (including demo data)
+      console.log('Deleting all existing programs...');
       const { error: deleteError } = await supabase
         .from('programs')
         .delete()
-        .lt('end_time', sixHoursAgo.toISOString());
+        .neq('id', 'impossible-id-that-does-not-exist');
 
       if (deleteError) {
-        console.error('Error deleting old programs:', deleteError);
+        console.error('Error deleting programs:', deleteError);
       }
 
       // Insert programs in smaller batches
