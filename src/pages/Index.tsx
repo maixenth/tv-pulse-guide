@@ -138,7 +138,6 @@ const Index = () => {
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         favoritesCount={favorites.size}
-        onReloadEPG={reloadEPG}
       />
 
       <CategoryFilter

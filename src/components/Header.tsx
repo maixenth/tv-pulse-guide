@@ -3,40 +3,41 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 
 interface HeaderProps {
   searchQuery: string;
   onSearchChange: (query: string) => void;
   favoritesCount: number;
-  onReloadEPG?: () => void;
 }
 
-export const Header = ({ searchQuery, onSearchChange, favoritesCount, onReloadEPG }: HeaderProps) => {
+export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderProps) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const { toast } = useToast();
 
   const handleReloadEPG = async () => {
-    if (!onReloadEPG) return;
-    
     setIsUpdating(true);
     toast({
-      title: "Rechargement EPG",
-      description: "Téléchargement et parsing en cours...",
+      title: "Mise à jour EPG",
+      description: "Téléchargement et mise à jour des données...",
     });
 
     try {
-      // Clear cache to force fresh download
-      localStorage.removeItem('epg-cache');
-      await onReloadEPG();
+      const { data, error } = await supabase.functions.invoke('populate-epg-data');
       
+      if (error) throw error;
+
       toast({
-        title: "Succès",
-        description: "EPG rechargé avec succès !",
+        title: "✅ EPG mis à jour",
+        description: `${data.channelsCount} chaînes et ${data.programsCount} programmes chargés`,
       });
+      
+      window.location.reload();
     } catch (error) {
+      console.error('Error refreshing EPG:', error);
       toast({
         title: "Erreur",
-        description: "Échec du rechargement EPG",
+        description: "Échec de la mise à jour EPG",
         variant: "destructive",
       });
     } finally {
@@ -72,18 +73,16 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount, onReloadEP
           </div>
 
           <div className="flex items-center gap-2">
-            {onReloadEPG && (
-              <Button
-                onClick={handleReloadEPG}
-                disabled={isUpdating}
-                variant="outline"
-                size="sm"
-                className="gap-2"
-              >
-                <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
-                {isUpdating ? 'Mise à jour...' : 'MAJ EPG'}
-              </Button>
-            )}
+            <Button
+              onClick={handleReloadEPG}
+              disabled={isUpdating}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
+              {isUpdating ? 'Mise à jour...' : 'MAJ EPG'}
+            </Button>
 
             <button className="relative p-2 rounded-lg hover:bg-card transition-colors">
               <Heart className="w-6 h-6 text-foreground" />

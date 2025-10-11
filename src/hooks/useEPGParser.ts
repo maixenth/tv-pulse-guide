@@ -12,9 +12,6 @@ interface EPGProgram {
   isLive: boolean;
 }
 
-const CACHE_KEY = 'epg-cache';
-const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
-
 export function useEPGParser() {
   const [programs, setPrograms] = useState<EPGProgram[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -26,41 +23,32 @@ export function useEPGParser() {
 
   const loadEPG = async () => {
     try {
-      // Check cache first
-      const cached = localStorage.getItem(CACHE_KEY);
-      if (cached) {
-        const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < CACHE_DURATION) {
-          console.log('Using cached EPG data');
-          setPrograms(data);
-          setIsLoading(false);
-          return;
-        }
-      }
-
-      console.log('Fetching EPG via edge function...');
+      console.log('Fetching programs from Supabase...');
       setIsLoading(true);
 
-      // Call edge function to download and parse EPG
-      const { data, error } = await supabase.functions.invoke('fetch-epg');
+      const { data, error } = await supabase
+        .from('programs')
+        .select('*')
+        .order('start_time');
 
       if (error) throw error;
-      if (!data || !data.programs) throw new Error('No EPG data returned');
 
-      const parsedPrograms = data.programs;
-      console.log(`Loaded ${parsedPrograms.length} programs from edge function`);
-
-
-      // Cache the result
-      localStorage.setItem(CACHE_KEY, JSON.stringify({
-        data: parsedPrograms,
-        timestamp: Date.now(),
+      const parsedPrograms = data.map((prog: any) => ({
+        id: prog.id,
+        title: prog.title,
+        description: prog.description || '',
+        start: prog.start_time,
+        end: prog.end_time,
+        channel: prog.channel_id,
+        category: prog.category,
+        isLive: prog.is_live,
       }));
 
+      console.log(`Loaded ${parsedPrograms.length} programs from database`);
       setPrograms(parsedPrograms);
       setError(null);
     } catch (err) {
-      console.error('EPG parsing error:', err);
+      console.error('EPG loading error:', err);
       setError(err instanceof Error ? err.message : 'Failed to load EPG');
     } finally {
       setIsLoading(false);
