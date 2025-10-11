@@ -57,9 +57,10 @@ export const useIPTVChannels = () => {
       }
 
       console.log(`Loaded ${data.totalChannels} channels`);
+      console.log('First 3 channel logos:', data.channels.slice(0, 3).map(c => ({ name: c.name, logo: c.logo })));
       return data;
     },
-    staleTime: 1000 * 60 * 60, // 1 hour
+    staleTime: 0, // Disable cache for testing
     retry: 2,
   });
 };
