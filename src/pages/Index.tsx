@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { ProgramCard } from '@/components/ProgramCard';
@@ -8,6 +8,8 @@ import { DateFilter } from '@/components/DateFilter';
 import { Stats } from '@/components/Stats';
 import { mockPrograms, channels } from '@/data/mockPrograms';
 import { Program, ProgramCategory } from '@/types/program';
+import { useIPTVChannels } from '@/hooks/useIPTVChannels';
+import { toast } from 'sonner';
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,6 +19,30 @@ const Index = () => {
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+
+  // Fetch real IPTV channels
+  const { data: iptvData, isLoading, error } = useIPTVChannels();
+
+  useEffect(() => {
+    if (error) {
+      toast.error('Erreur lors du chargement des chaînes TV', {
+        description: 'Utilisation des données de démonstration'
+      });
+    } else if (iptvData) {
+      toast.success(`${iptvData.totalChannels} chaînes TV chargées !`, {
+        description: 'Données en temps réel disponibles'
+      });
+    }
+  }, [iptvData, error]);
+
+  // Get unique channels list from IPTV data
+  const availableChannels = useMemo(() => {
+    if (iptvData?.channels) {
+      const uniqueChannels = Array.from(new Set(iptvData.channels.map(ch => ch.name))).sort();
+      return uniqueChannels;
+    }
+    return channels;
+  }, [iptvData]);
 
   const categories: ProgramCategory[] = [
     'Sport',
@@ -82,15 +108,24 @@ const Index = () => {
       />
 
       <main className="container mx-auto px-4 py-8">
-        <Stats 
-          totalChannels={channels.length}
-          totalPrograms={mockPrograms.length}
-          livePrograms={livePrograms}
-        />
+        {isLoading && (
+          <div className="flex items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+            <p className="ml-4 text-lg text-muted-foreground">Chargement des chaînes TV en direct...</p>
+          </div>
+        )}
+
+        {!isLoading && (
+          <>
+            <Stats 
+              totalChannels={availableChannels.length}
+              totalPrograms={mockPrograms.length}
+              livePrograms={livePrograms}
+            />
 
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
           <ChannelSelector
-            channels={channels}
+            channels={availableChannels}
             selectedChannel={selectedChannel}
             onChannelChange={setSelectedChannel}
           />
@@ -130,6 +165,8 @@ const Index = () => {
               />
             ))}
           </div>
+        )}
+          </>
         )}
       </main>
 
