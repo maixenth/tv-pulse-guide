@@ -156,7 +156,7 @@ serve(async (req) => {
       console.log('Fetching EPG data...');
       
       // Try the main IPTV-org EPG index
-      const epgResponse = await fetch('https://iptv-org.github.io/epg/guides/fr-fr/programme-tv.com.epg.xml');
+      const epgResponse = await fetch('https://iptv-org.github.io/epg/guides/fr/programme-tv.com.epg.xml');
       if (epgResponse.ok) {
         const epgXml = await epgResponse.text();
         console.log(`EPG XML size: ${epgXml.length} bytes`);
@@ -169,41 +169,44 @@ serve(async (req) => {
       console.error('Error fetching EPG data:', epgError);
     }
 
-    // Filter channels to only keep those that have EPG programs
-    const channelsWithPrograms = new Set(programs.map(p => p.channel));
-    console.log(`Channels with EPG data: ${channelsWithPrograms.size}`);
-    
-    const filteredChannels = relevantChannels.filter(ch => 
-      channelsWithPrograms.has(ch.name) || channelsWithPrograms.has(ch.id)
-    );
-    
-    console.log(`Filtered to ${filteredChannels.length} channels with EPG data (from ${relevantChannels.length} total)`);
+    // Only filter channels if we actually got EPG data
+    const channelsToReturn = programs.length > 0 ? (() => {
+      const channelsWithPrograms = new Set(programs.map(p => p.channel));
+      console.log(`Channels with EPG data: ${channelsWithPrograms.size}`);
+      
+      const filtered = relevantChannels.filter(ch => 
+        channelsWithPrograms.has(ch.name) || channelsWithPrograms.has(ch.id)
+      );
+      
+      console.log(`Filtered to ${filtered.length} channels with EPG (from ${relevantChannels.length} total)`);
+      return filtered;
+    })() : relevantChannels;
 
 
-    // Group channels by category (only channels with EPG data)
+    // Group channels by category
     const categorizedChannels = {
-      sports: filteredChannels.filter(ch => 
+      sports: channelsToReturn.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('sport'))
       ),
-      news: filteredChannels.filter(ch => 
+      news: channelsToReturn.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('news'))
       ),
-      entertainment: filteredChannels.filter(ch => 
+      entertainment: channelsToReturn.filter(ch => 
         ch.categories?.some(cat => 
           cat.toLowerCase().includes('entertainment') || 
           cat.toLowerCase().includes('general')
         )
       ),
-      kids: filteredChannels.filter(ch => 
+      kids: channelsToReturn.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('kids'))
       ),
-      movies: filteredChannels.filter(ch => 
+      movies: channelsToReturn.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('movie'))
       ),
-      series: filteredChannels.filter(ch => 
+      series: channelsToReturn.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('series'))
       ),
-      documentary: filteredChannels.filter(ch => 
+      documentary: channelsToReturn.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('documentary'))
       ),
     };
@@ -211,8 +214,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        totalChannels: filteredChannels.length,
-        channels: filteredChannels,
+        totalChannels: channelsToReturn.length,
+        channels: channelsToReturn,
         categorized: categorizedChannels,
         programs: programs,
       }),
