@@ -95,7 +95,7 @@ serve(async (req) => {
 
       console.log(`Parsed ${allChannels.length} total channels`);
 
-      // Filter for French channels only to reduce load
+      // Filter for French channels only
       const channels = allChannels.filter(ch => {
         const nameLower = ch.name.toLowerCase();
         const categoryLower = ch.categories.join(' ').toLowerCase();
@@ -112,7 +112,7 @@ serve(async (req) => {
           categoryLower.includes('france') ||
           categoryLower.includes('français')
         );
-      }).slice(0, 500); // Limit to 500 channels max
+      });
 
       console.log(`Filtered to ${channels.length} French channels`);
 
