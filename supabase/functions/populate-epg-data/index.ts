@@ -127,89 +127,51 @@ serve(async (req) => {
 
     console.log('Channels inserted successfully');
 
-    // Generate demo programs for testing (waiting for epg.best authorization)
-    console.log('Generating demo EPG programs...');
-    
+    // Simple demo programs generation (minimal processing)
     const now = new Date();
     const programs: EPGProgram[] = [];
     
-    const demoPrograms = [
-      { title: "Journal télévisé", category: "Actualités", duration: 30 },
-      { title: "Magazine sportif", category: "Sport", duration: 60 },
-      { title: "Film du soir", category: "Cinéma", duration: 120 },
-      { title: "Série policière", category: "Séries", duration: 50 },
-      { title: "Documentaire nature", category: "Documentaires", duration: 52 },
-      { title: "Dessins animés", category: "Enfants", duration: 25 },
-      { title: "Divertissement", category: "Divertissement", duration: 90 },
-      { title: "Météo", category: "Actualités", duration: 5 },
-      { title: "Émission culturelle", category: "Documentaires", duration: 45 },
-      { title: "Match en direct", category: "Sport", duration: 110 },
-    ];
-
-    // Generate 5 programs per channel over 12 hours
-    for (const channel of channels.slice(0, 100)) { // First 100 channels only
-      let startTime = new Date(now.getTime() - 2 * 60 * 60 * 1000); // Start 2h ago
+    // Only process first 50 channels to stay under CPU limit
+    const limitedChannels = channels.slice(0, 50);
+    
+    for (const channel of limitedChannels) {
+      let startTime = new Date(now.getTime() - 60 * 60 * 1000); // 1h ago
       
-      for (let i = 0; i < 5; i++) {
-        const demoProgram = demoPrograms[Math.floor(Math.random() * demoPrograms.length)];
-        const endTime = new Date(startTime.getTime() + demoProgram.duration * 60 * 1000);
-        const isLive = now >= startTime && now <= endTime;
+      // Only 3 programs per channel
+      for (let i = 0; i < 3; i++) {
+        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1h duration
         
         programs.push({
-          id: `${channel.id}-${startTime.getTime()}`,
-          title: demoProgram.title,
-          description: `Programme de démonstration en attendant l'accès à epg.best`,
+          id: `${channel.id}-${i}`,
+          title: `Programme ${i + 1}`,
+          description: 'Démo',
           start_time: startTime.toISOString(),
           end_time: endTime.toISOString(),
           channel_id: channel.id,
-          category: demoProgram.category,
-          is_live: isLive,
+          category: 'Général',
+          is_live: now >= startTime && now <= endTime,
         });
         
         startTime = endTime;
       }
     }
 
-    console.log(`Generated ${programs.length} demo programs`);
-
-    // Delete old programs
-    const { error: deleteError } = await supabase
-      .from('programs')
-      .delete()
-      .lt('end_time', new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString());
-
-    if (deleteError) {
-      console.error('Error deleting old programs:', deleteError);
-    }
-
-    // Insert demo programs
-    console.log('Inserting demo programs...');
-    const batchSize = 100;
-    for (let i = 0; i < programs.length; i += batchSize) {
-      const batch = programs.slice(i, i + batchSize);
-      const { error: programError } = await supabase
+    // Quick insert
+    if (programs.length > 0) {
+      const { error } = await supabase
         .from('programs')
-        .upsert(batch, { onConflict: 'id' });
-
-      if (programError) {
-        console.error(`Error inserting batch:`, programError);
-        throw programError;
-      }
+        .upsert(programs, { onConflict: 'id' });
+      
+      if (error) console.error('Insert error:', error);
     }
-
-    console.log('Demo EPG data populated successfully');
 
     return new Response(
       JSON.stringify({
         success: true,
         channelsCount: channels.length,
         programsCount: programs.length,
-        mode: 'demo',
-        note: 'Programmes de démonstration - En attente de l\'autorisation epg.best',
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error populating EPG data:', error);
