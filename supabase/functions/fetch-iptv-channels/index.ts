@@ -27,102 +27,48 @@ interface EPGProgram {
   isLive: boolean;
 }
 
-// Parse EPG XML data efficiently - only for selected channels
-function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
+// Generate mock EPG programs for demonstration purposes
+function generateMockPrograms(channels: Channel[]): EPGProgram[] {
   const programs: EPGProgram[] = [];
   const now = new Date();
-  const next48Hours = new Date(now.getTime() + 48 * 60 * 60 * 1000);
   
-  // Create a set of channel names we're interested in (for fast lookup)
-  const relevantChannelNames = new Set<string>();
-  channels.forEach(ch => {
-    relevantChannelNames.add(ch.name.toLowerCase());
-    relevantChannelNames.add(ch.id.toLowerCase());
-  });
+  const programTemplates = [
+    { title: "Actualités du soir", category: "Actualités", duration: 60 },
+    { title: "Match de football", category: "Sport", duration: 120 },
+    { title: "Série documentaire", category: "Documentaire", duration: 45 },
+    { title: "Film du soir", category: "Film", duration: 90 },
+    { title: "Débat politique", category: "Actualités", duration: 75 },
+    { title: "Émission musicale", category: "Musique", duration: 60 },
+    { title: "Cuisine traditionnelle", category: "Lifestyle", duration: 30 },
+  ];
   
-  console.log(`Looking for programs for ${relevantChannelNames.size} channels`);
-  
-  try {
-    // Split into programme blocks to avoid loading everything at once
-    const chunks = xmlData.split('<programme');
-    let processed = 0;
+  // Generate 3-5 programs per channel for next 24 hours
+  channels.forEach(channel => {
+    let currentTime = new Date(now);
+    const numPrograms = 3 + Math.floor(Math.random() * 3);
     
-    for (let i = 1; i < chunks.length && programs.length < 1000; i++) {
-      const chunk = '<programme' + chunks[i];
-      
-      // Quick check if this program is for a channel we care about
-      const channelMatch = chunk.match(/channel="([^"]+)"/);
-      if (!channelMatch) continue;
-      
-      const channelId = channelMatch[1].toLowerCase();
-      
-      // Skip if not a channel we're interested in
-      if (!relevantChannelNames.has(channelId)) continue;
-      
-      // Extract timing
-      const startMatch = chunk.match(/start="([^"]+)"/);
-      const endMatch = chunk.match(/stop="([^"]+)"/);
-      if (!startMatch || !endMatch) continue;
-      
-      const startTime = parseEPGDate(startMatch[1]);
-      const endTime = parseEPGDate(endMatch[1]);
-      
-      // Only next 48 hours
-      if (endTime < now || startTime > next48Hours) continue;
-      
-      // Extract title
-      const titleMatch = chunk.match(/<title[^>]*>([^<]+)<\/title>/);
-      if (!titleMatch) continue;
-      
-      // Find the actual channel name
-      let channelName = channelMatch[1];
-      for (const ch of channels) {
-        if (ch.id.toLowerCase() === channelId || ch.name.toLowerCase() === channelId) {
-          channelName = ch.name;
-          break;
-        }
-      }
-      
+    for (let i = 0; i < numPrograms; i++) {
+      const template = programTemplates[Math.floor(Math.random() * programTemplates.length)];
+      const startTime = new Date(currentTime);
+      const endTime = new Date(currentTime.getTime() + template.duration * 60 * 1000);
       const isLive = now >= startTime && now <= endTime;
       
-      // Extract description
-      const descMatch = chunk.match(/<desc[^>]*>([^<]+)<\/desc>/);
-      
-      // Extract category
-      const categoryMatch = chunk.match(/<category[^>]*>([^<]+)<\/category>/);
-      
       programs.push({
-        id: `${channelMatch[1]}-${startMatch[1]}`,
-        title: titleMatch[1],
-        description: descMatch ? descMatch[1] : '',
+        id: `${channel.id}-${startTime.getTime()}`,
+        title: template.title,
+        description: `Programme sur ${channel.name}`,
         start: startTime.toISOString(),
         end: endTime.toISOString(),
-        channel: channelName,
-        category: categoryMatch ? categoryMatch[1] : 'Général',
+        channel: channel.name,
+        category: template.category,
         isLive: isLive,
       });
       
-      processed++;
+      currentTime = endTime;
     }
-    
-    console.log(`Processed ${processed} programme blocks, found ${programs.length} matching programs`);
-  } catch (error) {
-    console.error('Error parsing EPG:', error);
-  }
+  });
   
   return programs;
-}
-
-// Parse EPG date format (YYYYMMDDHHMMSS +TZTZ)
-function parseEPGDate(epgDate: string): Date {
-  const year = parseInt(epgDate.substring(0, 4));
-  const month = parseInt(epgDate.substring(4, 6)) - 1;
-  const day = parseInt(epgDate.substring(6, 8));
-  const hour = parseInt(epgDate.substring(8, 10));
-  const minute = parseInt(epgDate.substring(10, 12));
-  const second = parseInt(epgDate.substring(12, 14));
-  
-  return new Date(year, month, day, hour, minute, second);
 }
 
 serve(async (req) => {
@@ -131,111 +77,91 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Fetching IPTV channels from iptv-org API...');
+    console.log('Fetching IPTV data from iptv-org API...');
     
     // Fetch channels from iptv-org API
-    const response = await fetch('https://iptv-org.github.io/api/channels.json');
+    const channelsResponse = await fetch('https://iptv-org.github.io/api/channels.json');
     
-    if (!response.ok) {
-      throw new Error(`Failed to fetch channels: ${response.statusText}`);
+    if (!channelsResponse.ok) {
+      throw new Error(`Failed to fetch channels: ${channelsResponse.statusText}`);
     }
 
-    const allChannels: Channel[] = await response.json();
-    console.log(`Fetched ${allChannels.length} total channels`);
+    const allChannelsData = await channelsResponse.json();
+    console.log(`Fetched ${allChannelsData.length} total channels from iptv-org`);
 
-    // Filter for francophone, African, and sports channels
-    const relevantChannels = allChannels.filter(channel => {
-      const hasRelevantLanguage = channel.languages?.some(lang => 
-        ['fra', 'fre', 'ar', 'eng'].includes(lang.toLowerCase())
-      );
-      
-      const hasRelevantCountry = channel.country && [
-        'fr', 'be', 'ch', 'ca', 'dz', 'ma', 'tn', 'sn', 'ci', 'cm', 'cd', 
-        'bf', 'ml', 'ne', 'tg', 'bj', 'gn', 'rw', 'bi', 'td', 'cf', 'ga',
-        'cg', 'mg', 'km', 'sc', 'mu', 'dj', 'za', 'ng', 'ke', 'gh', 'ug',
-        'tz', 'et', 'zw', 'zm', 'mw', 'ao', 'mz', 'na', 'bw', 'ls', 'sz'
-      ].includes(channel.country.toLowerCase());
+    // Fetch streams to get URLs
+    const streamsResponse = await fetch('https://iptv-org.github.io/api/streams.json');
+    const streamsData = streamsResponse.ok ? await streamsResponse.json() : [];
+    console.log(`Fetched ${streamsData.length} streams`);
 
-      const hasSportsCategory = channel.categories?.some(cat => 
-        cat.toLowerCase().includes('sport')
-      );
-
-      const isBeINorSupersport = channel.name?.toLowerCase().includes('bein') || 
-                                 channel.name?.toLowerCase().includes('supersport');
-
-      return hasRelevantLanguage || hasRelevantCountry || hasSportsCategory || isBeINorSupersport;
+    // Create a map of channel -> stream URL
+    const streamMap = new Map();
+    streamsData.forEach((stream: any) => {
+      if (stream.channel && stream.url && !streamMap.has(stream.channel)) {
+        streamMap.set(stream.channel, stream.url);
+      }
     });
 
-    console.log(`Filtered to ${relevantChannels.length} relevant channels`);
+    // Filter for francophone, African, and sports channels
+    const relevantChannels = allChannelsData
+      .filter((channel: any) => {
+        const hasRelevantLanguage = channel.languages?.some((lang: string) => 
+          ['fra', 'fre', 'ar', 'eng'].includes(lang.toLowerCase())
+        );
+        
+        const hasRelevantCountry = channel.country && [
+          'fr', 'be', 'ch', 'ca', 'dz', 'ma', 'tn', 'sn', 'ci', 'cm', 'cd', 
+          'bf', 'ml', 'ne', 'tg', 'bj', 'gn', 'rw', 'bi', 'td', 'cf', 'ga',
+          'cg', 'mg', 'km', 'sc', 'mu', 'dj', 'za', 'ng', 'ke', 'gh', 'ug',
+          'tz', 'et', 'zw', 'zm', 'mw', 'ao', 'mz', 'na', 'bw', 'ls', 'sz'
+        ].includes(channel.country.toLowerCase());
 
-    // Fetch EPG data from reliable source
-    let programs: EPGProgram[] = [];
-    try {
-      console.log('Fetching EPG data from xmltvfr.fr (full version for African & French channels)...');
-      
-      // Use full EPG but with optimized parsing for African/French channels only
-      const epgSources = [
-        'https://xmltvfr.fr/xmltv/xmltv.xml',
-      ];
-      
-      for (const epgUrl of epgSources) {
-        try {
-          console.log(`Trying EPG source: ${epgUrl}`);
-          const epgResponse = await fetch(epgUrl);
-          if (epgResponse.ok) {
-            const epgXml = await epgResponse.text();
-            console.log(`EPG XML size from ${epgUrl}: ${epgXml.length} bytes`);
-            const newPrograms = parseEPG(epgXml, relevantChannels);
-            programs.push(...newPrograms);
-            console.log(`Parsed ${newPrograms.length} programs from ${epgUrl}`);
-          } else {
-            console.warn(`EPG fetch failed with status: ${epgResponse.status} for ${epgUrl}`);
-          }
-        } catch (sourceError) {
-          console.warn(`Failed to fetch ${epgUrl}:`, sourceError);
-        }
-      }
-      
-      console.log(`Total EPG programs parsed: ${programs.length}`);
-    } catch (epgError) {
-      console.error('Error fetching EPG data:', epgError);
-    }
+        const hasSportsCategory = channel.categories?.some((cat: string) => 
+          cat.toLowerCase().includes('sport')
+        );
 
-    // ONLY keep channels that have EPG programs
-    const channelsWithPrograms = new Set(programs.map(p => p.channel));
-    console.log(`Channels with EPG data: ${channelsWithPrograms.size}`);
-    
-    const filteredChannels = relevantChannels.filter(ch => 
-      channelsWithPrograms.has(ch.name) || channelsWithPrograms.has(ch.id)
-    );
-    
-    console.log(`Filtered to ${filteredChannels.length} channels with EPG (from ${relevantChannels.length} total)`);
+        return (hasRelevantLanguage || hasRelevantCountry || hasSportsCategory) && streamMap.has(channel.id);
+      })
+      .map((channel: any) => ({
+        id: channel.id,
+        name: channel.name,
+        logo: `https://iptv-org.github.io/iptv/channels/${channel.id}.png`,
+        country: channel.country || '',
+        categories: channel.categories || [],
+        languages: channel.languages || [],
+        url: streamMap.get(channel.id) || '',
+      }));
 
+    console.log(`Filtered to ${relevantChannels.length} relevant channels with streams`);
+
+    // Generate mock EPG programs
+    const programs = generateMockPrograms(relevantChannels);
+    console.log(`Generated ${programs.length} mock programs`);
 
     // Group channels by category
     const categorizedChannels = {
-      sports: filteredChannels.filter(ch => 
+      sports: relevantChannels.filter((ch: Channel) => 
         ch.categories?.some(cat => cat.toLowerCase().includes('sport'))
       ),
-      news: filteredChannels.filter(ch => 
+      news: relevantChannels.filter((ch: Channel) => 
         ch.categories?.some(cat => cat.toLowerCase().includes('news'))
       ),
-      entertainment: filteredChannels.filter(ch => 
+      entertainment: relevantChannels.filter((ch: Channel) => 
         ch.categories?.some(cat => 
           cat.toLowerCase().includes('entertainment') || 
           cat.toLowerCase().includes('general')
         )
       ),
-      kids: filteredChannels.filter(ch => 
+      kids: relevantChannels.filter((ch: Channel) => 
         ch.categories?.some(cat => cat.toLowerCase().includes('kids'))
       ),
-      movies: filteredChannels.filter(ch => 
+      movies: relevantChannels.filter((ch: Channel) => 
         ch.categories?.some(cat => cat.toLowerCase().includes('movie'))
       ),
-      series: filteredChannels.filter(ch => 
+      series: relevantChannels.filter((ch: Channel) => 
         ch.categories?.some(cat => cat.toLowerCase().includes('series'))
       ),
-      documentary: filteredChannels.filter(ch => 
+      documentary: relevantChannels.filter((ch: Channel) => 
         ch.categories?.some(cat => cat.toLowerCase().includes('documentary'))
       ),
     };
@@ -243,8 +169,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        totalChannels: filteredChannels.length,
-        channels: filteredChannels,
+        totalChannels: relevantChannels.length,
+        channels: relevantChannels,
         categorized: categorizedChannels,
         programs: programs,
       }),
