@@ -43,9 +43,9 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch compressed EPG file (.gz version - 0.83 MB)
-    console.log('Fetching EPG XML.GZ from xmltvfr.fr (TNT France)...');
-    const epgResponse = await fetch('https://xmltvfr.fr/xmltv/xmltv_tnt.xml.gz');
+    // Fetch compressed EPG file from epg.pw
+    console.log('Fetching EPG XML.GZ from epg.pw (France)...');
+    const epgResponse = await fetch('https://epg.pw/xmltv/epg_FR.xml.gz');
     
     if (!epgResponse.ok) {
       throw new Error(`Failed to fetch EPG: ${epgResponse.status}`);
