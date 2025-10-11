@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { parse } from "https://deno.land/x/xml@2.1.3/mod.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,100 +28,34 @@ interface EPGProgram {
   isLive: boolean;
 }
 
-// Parse EPG date format (YYYYMMDDHHMMSS +TZTZ)
-function parseEPGDate(epgDate: string): Date {
-  const year = parseInt(epgDate.substring(0, 4));
-  const month = parseInt(epgDate.substring(4, 6)) - 1;
-  const day = parseInt(epgDate.substring(6, 8));
-  const hour = parseInt(epgDate.substring(8, 10));
-  const minute = parseInt(epgDate.substring(10, 12));
-  const second = parseInt(epgDate.substring(12, 14));
-  
-  return new Date(year, month, day, hour, minute, second);
-}
-
-// Parse EPG XML using XML parser - much more efficient
-async function parseEPGFromURL(url: string, channelNames: Set<string>): Promise<EPGProgram[]> {
-  const programs: EPGProgram[] = [];
-  const now = new Date();
-  const channelProgramCount = new Map<string, number>();
-  const maxProgramsPerChannel = 3;
-  
+// Fetch EPG data from Supabase Storage
+async function getEPGFromStorage(): Promise<EPGProgram[]> {
   try {
-    console.log(`Fetching EPG from ${url}...`);
-    const response = await fetch(url);
+    console.log('Fetching pre-parsed EPG from Supabase Storage...');
     
-    if (!response.ok) {
-      console.error(`Failed to fetch EPG: ${response.status}`);
-      return programs;
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+    // Download EPG JSON from storage
+    const { data, error } = await supabase.storage
+      .from('epg-data')
+      .download('epg-programs.json');
+
+    if (error) {
+      console.error('Error downloading EPG from storage:', error);
+      return [];
     }
+
+    const jsonText = await data.text();
+    const epgData = JSON.parse(jsonText);
     
-    const xmlText = await response.text();
-    console.log(`EPG XML size: ${xmlText.length} bytes`);
-    
-    // Parse XML to JSON object
-    console.log('Parsing XML to JSON...');
-    const doc: any = parse(xmlText);
-    
-    // Access programme elements
-    const tv = doc.tv;
-    if (!tv || !tv.programme) {
-      console.error('No programme data found in XML');
-      return programs;
-    }
-    
-    const programmes = Array.isArray(tv.programme) ? tv.programme : [tv.programme];
-    console.log(`Found ${programmes.length} programme entries`);
-    
-    for (const prog of programmes) {
-      const channelId = prog['@channel']?.toLowerCase();
-      if (!channelId) continue;
-      
-      // Skip if we don't have this channel or already have enough programs for it
-      if (!channelNames.has(channelId)) continue;
-      if ((channelProgramCount.get(channelId) || 0) >= maxProgramsPerChannel) continue;
-      
-      const startStr = prog['@start'];
-      const stopStr = prog['@stop'];
-      if (!startStr || !stopStr) continue;
-      
-      const startTime = parseEPGDate(startStr);
-      const endTime = parseEPGDate(stopStr);
-      
-      // Only keep programs that are current or upcoming (not past)
-      if (endTime < now) continue;
-      
-      const title = prog.title?.['#text'] || prog.title;
-      if (!title) continue;
-      
-      const description = prog.desc?.['#text'] || prog.desc || '';
-      const category = prog.category?.['#text'] || prog.category || 'Général';
-      
-      const isLive = now >= startTime && now <= endTime;
-      
-      programs.push({
-        id: `${prog['@channel']}-${startStr}`,
-        title: String(title),
-        description: String(description),
-        start: startTime.toISOString(),
-        end: endTime.toISOString(),
-        channel: prog['@channel'],
-        category: String(category),
-        isLive: isLive,
-      });
-      
-      channelProgramCount.set(channelId, (channelProgramCount.get(channelId) || 0) + 1);
-      
-      // Stop early if we have enough programs total
-      if (programs.length >= 3000) break;
-    }
-    
-    console.log(`Parsed ${programs.length} real EPG programs for ${channelProgramCount.size} channels`);
+    console.log(`Loaded ${epgData.total_programs} programs from storage (updated: ${epgData.updated_at})`);
+    return epgData.programs || [];
   } catch (error) {
-    console.error('Error parsing EPG:', error);
+    console.error('Error fetching EPG from storage:', error);
+    return [];
   }
-  
-  return programs;
 }
 
 serve(async (req) => {
@@ -200,19 +134,9 @@ serve(async (req) => {
 
     console.log(`Filtered to ${relevantChannels.length} relevant channels with streams`);
 
-    // Create a set of channel IDs and names for EPG lookup
-    const channelNamesForEPG = new Set<string>();
-    relevantChannels.forEach((ch: Channel) => {
-      channelNamesForEPG.add(ch.id.toLowerCase());
-      channelNamesForEPG.add(ch.name.toLowerCase());
-    });
-
-    // Fetch real EPG data from xmltvfr.fr (full version)
-    const programs = await parseEPGFromURL(
-      'https://xmltvfr.fr/xmltv/xmltv.xml',
-      channelNamesForEPG
-    );
-    console.log(`Got ${programs.length} real EPG programs`);
+    // Fetch EPG data from pre-parsed JSON in Storage
+    const programs = await getEPGFromStorage();
+    console.log(`Loaded ${programs.length} EPG programs from storage`);
 
     // Group channels by category
     const categorizedChannels = {
