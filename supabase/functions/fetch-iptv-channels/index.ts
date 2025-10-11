@@ -154,55 +154,56 @@ serve(async (req) => {
     let programs: EPGProgram[] = [];
     try {
       console.log('Fetching EPG data...');
-      const epgSources = [
-        'https://iptv-org.github.io/epg/guides/fr/programme-tv.com.epg.xml',
-        'https://iptv-org.github.io/epg/guides/fr/telerama.fr.epg.xml',
-      ];
       
-      for (const epgUrl of epgSources) {
-        try {
-          console.log(`Trying EPG source: ${epgUrl}`);
-          const epgResponse = await fetch(epgUrl);
-          if (epgResponse.ok) {
-            const epgXml = await epgResponse.text();
-            const newPrograms = parseEPG(epgXml, relevantChannels);
-            programs.push(...newPrograms);
-            console.log(`Parsed ${newPrograms.length} programs from ${epgUrl}`);
-          }
-        } catch (sourceError) {
-          console.warn(`Failed to fetch from ${epgUrl}:`, sourceError);
-        }
+      // Try the main IPTV-org EPG index
+      const epgResponse = await fetch('https://iptv-org.github.io/epg/guides/fr-fr/programme-tv.com.epg.xml');
+      if (epgResponse.ok) {
+        const epgXml = await epgResponse.text();
+        console.log(`EPG XML size: ${epgXml.length} bytes`);
+        programs = parseEPG(epgXml, relevantChannels);
+        console.log(`Total EPG programs parsed: ${programs.length}`);
+      } else {
+        console.warn(`EPG fetch failed with status: ${epgResponse.status}`);
       }
-      
-      console.log(`Total EPG programs parsed: ${programs.length}`);
     } catch (epgError) {
       console.error('Error fetching EPG data:', epgError);
     }
 
-    // Group channels by category
+    // Filter channels to only keep those that have EPG programs
+    const channelsWithPrograms = new Set(programs.map(p => p.channel));
+    console.log(`Channels with EPG data: ${channelsWithPrograms.size}`);
+    
+    const filteredChannels = relevantChannels.filter(ch => 
+      channelsWithPrograms.has(ch.name) || channelsWithPrograms.has(ch.id)
+    );
+    
+    console.log(`Filtered to ${filteredChannels.length} channels with EPG data (from ${relevantChannels.length} total)`);
+
+
+    // Group channels by category (only channels with EPG data)
     const categorizedChannels = {
-      sports: relevantChannels.filter(ch => 
+      sports: filteredChannels.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('sport'))
       ),
-      news: relevantChannels.filter(ch => 
+      news: filteredChannels.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('news'))
       ),
-      entertainment: relevantChannels.filter(ch => 
+      entertainment: filteredChannels.filter(ch => 
         ch.categories?.some(cat => 
           cat.toLowerCase().includes('entertainment') || 
           cat.toLowerCase().includes('general')
         )
       ),
-      kids: relevantChannels.filter(ch => 
+      kids: filteredChannels.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('kids'))
       ),
-      movies: relevantChannels.filter(ch => 
+      movies: filteredChannels.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('movie'))
       ),
-      series: relevantChannels.filter(ch => 
+      series: filteredChannels.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('series'))
       ),
-      documentary: relevantChannels.filter(ch => 
+      documentary: filteredChannels.filter(ch => 
         ch.categories?.some(cat => cat.toLowerCase().includes('documentary'))
       ),
     };
@@ -210,8 +211,8 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        totalChannels: relevantChannels.length,
-        channels: relevantChannels,
+        totalChannels: filteredChannels.length,
+        channels: filteredChannels,
         categorized: categorizedChannels,
         programs: programs,
       }),
