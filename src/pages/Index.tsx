@@ -3,12 +3,17 @@ import { Header } from '@/components/Header';
 import { CategoryFilter } from '@/components/CategoryFilter';
 import { ProgramCard } from '@/components/ProgramCard';
 import { ProgramDialog } from '@/components/ProgramDialog';
-import { mockPrograms } from '@/data/mockPrograms';
+import { ChannelSelector } from '@/components/ChannelSelector';
+import { DateFilter } from '@/components/DateFilter';
+import { Stats } from '@/components/Stats';
+import { mockPrograms, channels } from '@/data/mockPrograms';
 import { Program, ProgramCategory } from '@/types/program';
 
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ProgramCategory | 'Tous'>('Tous');
+  const [selectedChannel, setSelectedChannel] = useState('all');
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -27,15 +32,23 @@ const Index = () => {
     return mockPrograms.filter((program) => {
       const matchesCategory =
         selectedCategory === 'Tous' || program.category === selectedCategory;
+      
+      const matchesChannel =
+        selectedChannel === 'all' || program.channel === selectedChannel;
+      
       const matchesSearch =
         searchQuery === '' ||
         program.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         program.channel.toLowerCase().includes(searchQuery.toLowerCase()) ||
         program.description.toLowerCase().includes(searchQuery.toLowerCase());
 
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matchesChannel && matchesSearch;
     });
-  }, [searchQuery, selectedCategory]);
+  }, [searchQuery, selectedCategory, selectedChannel]);
+
+  const livePrograms = useMemo(() => {
+    return filteredPrograms.filter(p => p.isLive).length;
+  }, [filteredPrograms]);
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => {
@@ -69,12 +82,31 @@ const Index = () => {
       />
 
       <main className="container mx-auto px-4 py-8">
+        <Stats 
+          totalChannels={channels.length}
+          totalPrograms={mockPrograms.length}
+          livePrograms={livePrograms}
+        />
+
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <ChannelSelector
+            channels={channels}
+            selectedChannel={selectedChannel}
+            onChannelChange={setSelectedChannel}
+          />
+          <DateFilter
+            selectedDate={selectedDate}
+            onDateChange={setSelectedDate}
+          />
+        </div>
+
         <div className="mb-6">
           <h2 className="text-3xl font-bold text-foreground mb-2">
-            {selectedCategory === 'Tous' ? 'Programmes en ce moment' : selectedCategory}
+            {selectedCategory === 'Tous' ? 'Programmes disponibles' : selectedCategory}
+            {selectedChannel !== 'all' && ` - ${selectedChannel}`}
           </h2>
           <p className="text-muted-foreground">
-            {filteredPrograms.length} programme{filteredPrograms.length > 1 ? 's' : ''} disponible
+            {filteredPrograms.length} programme{filteredPrograms.length > 1 ? 's' : ''} trouvé
             {filteredPrograms.length > 1 ? 's' : ''}
           </p>
         </div>
