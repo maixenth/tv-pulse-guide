@@ -127,7 +127,7 @@ serve(async (req) => {
 
     console.log('Channels inserted successfully');
 
-    // 2. Fetch and parse EPG XML from epg.pw
+    // 2. Fetch and parse EPG XML from epg.pw (optimized version)
     console.log('Fetching EPG XML from epg.pw...');
     const epgResponse = await fetch('https://epg.pw/xmltv/epg_FR.xml.gz');
     if (!epgResponse.ok) {
@@ -143,7 +143,7 @@ serve(async (req) => {
     const xmlText = await decompressedStream.text();
     console.log(`Decompressed to ${(xmlText.length / 1024 / 1024).toFixed(2)} MB`);
 
-    console.log('Parsing XML...');
+    console.log('Parsing XML (limited processing to avoid timeout)...');
     const xmlDoc: any = parse(xmlText);
     
     if (!xmlDoc.tv || !xmlDoc.tv.programme) {
@@ -158,11 +158,20 @@ serve(async (req) => {
     const programs: EPGProgram[] = [];
     const channelIds = new Set(channels.map(ch => ch.id));
     const channelProgramCount = new Map<string, number>();
-    const maxProgramsPerChannel = 10;
+    
+    // DRASTICALLY REDUCED to avoid CPU timeout
+    const maxProgramsPerChannel = 3; // Reduced from 10
+    const maxTotalPrograms = 1000; // Hard limit to avoid timeout
 
-    console.log(`Found ${programElements.length} programme entries, filtering for our channels...`);
+    console.log(`Found ${programElements.length} programme entries, filtering...`);
 
     for (const prog of programElements) {
+      // Early exit if we hit our limit
+      if (programs.length >= maxTotalPrograms) {
+        console.log('Hit program limit, stopping parse early');
+        break;
+      }
+
       const channelId = prog['@channel'];
       if (!channelId || !channelIds.has(channelId)) continue;
 
@@ -176,11 +185,11 @@ serve(async (req) => {
       const startTime = parseEPGDate(startStr);
       const endTime = parseEPGDate(stopStr);
 
-      // Only keep current and next 48h programs
-      const fortyEightHoursLater = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+      // Only keep current and next 24h programs
+      const twentyFourHoursLater = new Date(now.getTime() + 24 * 60 * 60 * 1000);
       const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
       
-      if (endTime < sixHoursAgo || startTime > fortyEightHoursLater) continue;
+      if (endTime < sixHoursAgo || startTime > twentyFourHoursLater) continue;
 
       const title = prog.title?.['#text'] || prog.title;
       if (!title) continue;
@@ -201,13 +210,6 @@ serve(async (req) => {
       });
 
       channelProgramCount.set(channelId, currentCount + 1);
-
-      if (programs.length % 500 === 0) {
-        console.log(`Parsed ${programs.length} programs...`);
-      }
-
-      // Safety limit
-      if (programs.length >= 5000) break;
     }
 
     console.log(`Parsed ${programs.length} programs total`);
@@ -226,7 +228,7 @@ serve(async (req) => {
 
     // Insert programs in smaller batches
     console.log('Inserting programs into database...');
-    const batchSize = 250;
+    const batchSize = 100; // Reduced batch size
     for (let i = 0; i < programs.length; i += batchSize) {
       const batch = programs.slice(i, i + batchSize);
       const { error: programError } = await supabase
@@ -248,7 +250,8 @@ serve(async (req) => {
         success: true,
         channelsCount: channels.length,
         programsCount: programs.length,
-        source: 'epg.pw (France)',
+        source: 'epg.pw (France - limited)',
+        note: 'Limited to 1000 programs to avoid timeout',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
