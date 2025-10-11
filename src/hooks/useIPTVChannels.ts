@@ -41,7 +41,7 @@ interface IPTVResponse {
 
 export const useIPTVChannels = () => {
   return useQuery({
-    queryKey: ['iptv-channels'],
+    queryKey: ['iptv-channels', new Date().toISOString().split('T')[0]], // Change key daily to force refresh
     queryFn: async () => {
       console.log('Fetching IPTV channels from edge function...');
       
@@ -61,6 +61,7 @@ export const useIPTVChannels = () => {
       return data;
     },
     staleTime: 0, // Disable cache for testing
+    gcTime: 0, // Don't cache at all (replaces cacheTime in newer versions)
     retry: 2,
   });
 };
