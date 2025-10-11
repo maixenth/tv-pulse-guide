@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface EPGProgram {
   id: string;
@@ -11,7 +12,6 @@ interface EPGProgram {
   isLive: boolean;
 }
 
-const EPG_URL = 'https://xmltvfr.fr/xmltv/xmltv_tnt.xml.gz';
 const CACHE_KEY = 'epg-cache';
 const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours
 
@@ -38,79 +38,18 @@ export function useEPGParser() {
         }
       }
 
-      console.log('Downloading EPG from xmltvfr.fr...');
+      console.log('Fetching EPG via edge function...');
       setIsLoading(true);
 
-      // Download gzipped XML
-      const response = await fetch(EPG_URL);
-      if (!response.ok) throw new Error('Failed to download EPG');
+      // Call edge function to download and parse EPG
+      const { data, error } = await supabase.functions.invoke('fetch-epg');
 
-      const gzBlob = await response.blob();
-      console.log(`Downloaded ${(gzBlob.size / 1024).toFixed(2)} KB`);
+      if (error) throw error;
+      if (!data || !data.programs) throw new Error('No EPG data returned');
 
-      // Decompress using native DecompressionStream
-      const decompressedStream = gzBlob.stream().pipeThrough(
-        new DecompressionStream('gzip')
-      );
-      const decompressedBlob = await new Response(decompressedStream).blob();
-      const xmlText = await decompressedBlob.text();
-      console.log(`Decompressed to ${(xmlText.length / 1024).toFixed(2)} KB`);
+      const parsedPrograms = data.programs;
+      console.log(`Loaded ${parsedPrograms.length} programs from edge function`);
 
-      // Parse XML
-      const parser = new DOMParser();
-      const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-      
-      const programElements = xmlDoc.getElementsByTagName('programme');
-      const now = new Date();
-      const parsedPrograms: EPGProgram[] = [];
-      const channelProgramCount = new Map<string, number>();
-      const maxProgramsPerChannel = 10;
-
-      for (let i = 0; i < programElements.length; i++) {
-        const prog = programElements[i];
-        const channelId = prog.getAttribute('channel');
-        if (!channelId) continue;
-
-        const channelIdLower = channelId.toLowerCase();
-        if ((channelProgramCount.get(channelIdLower) || 0) >= maxProgramsPerChannel) continue;
-
-        const startStr = prog.getAttribute('start');
-        const stopStr = prog.getAttribute('stop');
-        if (!startStr || !stopStr) continue;
-
-        const startTime = parseEPGDate(startStr);
-        const endTime = parseEPGDate(stopStr);
-
-        // Only keep current and upcoming programs
-        if (endTime < now) continue;
-
-        const titleEl = prog.getElementsByTagName('title')[0];
-        const descEl = prog.getElementsByTagName('desc')[0];
-        const categoryEl = prog.getElementsByTagName('category')[0];
-
-        const title = titleEl?.textContent || '';
-        if (!title) continue;
-
-        const isLive = now >= startTime && now <= endTime;
-
-        parsedPrograms.push({
-          id: `${channelId}-${startStr}`,
-          title,
-          description: descEl?.textContent || '',
-          start: startTime.toISOString(),
-          end: endTime.toISOString(),
-          channel: channelId,
-          category: categoryEl?.textContent || 'Général',
-          isLive,
-        });
-
-        channelProgramCount.set(channelIdLower, (channelProgramCount.get(channelIdLower) || 0) + 1);
-
-        // Limit total programs to avoid performance issues
-        if (parsedPrograms.length >= 5000) break;
-      }
-
-      console.log(`Parsed ${parsedPrograms.length} programs`);
 
       // Cache the result
       localStorage.setItem(CACHE_KEY, JSON.stringify({
@@ -129,16 +68,4 @@ export function useEPGParser() {
   };
 
   return { programs, isLoading, error, reload: loadEPG };
-}
-
-// Parse EPG date format (YYYYMMDDHHMMSS +TZTZ)
-function parseEPGDate(epgDate: string): Date {
-  const year = parseInt(epgDate.substring(0, 4));
-  const month = parseInt(epgDate.substring(4, 6)) - 1;
-  const day = parseInt(epgDate.substring(6, 8));
-  const hour = parseInt(epgDate.substring(8, 10));
-  const minute = parseInt(epgDate.substring(10, 12));
-  const second = parseInt(epgDate.substring(12, 14));
-  
-  return new Date(year, month, day, hour, minute, second);
 }
