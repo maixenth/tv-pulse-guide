@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { parse } from "https://deno.land/x/xml@2.1.3/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,7 +40,7 @@ function parseEPGDate(epgDate: string): Date {
   return new Date(year, month, day, hour, minute, second);
 }
 
-// Parse EPG XML efficiently - only keep 3 programs per channel max
+// Parse EPG XML using XML parser - much more efficient
 async function parseEPGFromURL(url: string, channelNames: Set<string>): Promise<EPGProgram[]> {
   const programs: EPGProgram[] = [];
   const now = new Date();
@@ -58,54 +59,54 @@ async function parseEPGFromURL(url: string, channelNames: Set<string>): Promise<
     const xmlText = await response.text();
     console.log(`EPG XML size: ${xmlText.length} bytes`);
     
-    // Split by programme tags to avoid regex memory issues
-    const chunks = xmlText.split('<programme');
-    console.log(`Found ${chunks.length - 1} programme blocks`);
+    // Parse XML to JSON object
+    console.log('Parsing XML to JSON...');
+    const doc: any = parse(xmlText);
     
-    for (let i = 1; i < chunks.length; i++) {
-      const chunk = '<programme' + chunks[i].split('</programme>')[0] + '</programme>';
-      
-      // Extract channel
-      const channelMatch = chunk.match(/channel="([^"]+)"/);
-      if (!channelMatch) continue;
-      
-      const channelId = channelMatch[1].toLowerCase();
+    // Access programme elements
+    const tv = doc.tv;
+    if (!tv || !tv.programme) {
+      console.error('No programme data found in XML');
+      return programs;
+    }
+    
+    const programmes = Array.isArray(tv.programme) ? tv.programme : [tv.programme];
+    console.log(`Found ${programmes.length} programme entries`);
+    
+    for (const prog of programmes) {
+      const channelId = prog['@channel']?.toLowerCase();
+      if (!channelId) continue;
       
       // Skip if we don't have this channel or already have enough programs for it
       if (!channelNames.has(channelId)) continue;
       if ((channelProgramCount.get(channelId) || 0) >= maxProgramsPerChannel) continue;
       
-      // Extract timing
-      const startMatch = chunk.match(/start="([^"]+)"/);
-      const endMatch = chunk.match(/stop="([^"]+)"/);
-      if (!startMatch || !endMatch) continue;
+      const startStr = prog['@start'];
+      const stopStr = prog['@stop'];
+      if (!startStr || !stopStr) continue;
       
-      const startTime = parseEPGDate(startMatch[1]);
-      const endTime = parseEPGDate(endMatch[1]);
+      const startTime = parseEPGDate(startStr);
+      const endTime = parseEPGDate(stopStr);
       
       // Only keep programs that are current or upcoming (not past)
       if (endTime < now) continue;
       
-      // Extract title
-      const titleMatch = chunk.match(/<title[^>]*>([^<]+)<\/title>/);
-      if (!titleMatch) continue;
+      const title = prog.title?.['#text'] || prog.title;
+      if (!title) continue;
       
-      // Extract description
-      const descMatch = chunk.match(/<desc[^>]*>([^<]+)<\/desc>/);
-      
-      // Extract category
-      const categoryMatch = chunk.match(/<category[^>]*>([^<]+)<\/category>/);
+      const description = prog.desc?.['#text'] || prog.desc || '';
+      const category = prog.category?.['#text'] || prog.category || 'Général';
       
       const isLive = now >= startTime && now <= endTime;
       
       programs.push({
-        id: `${channelMatch[1]}-${startMatch[1]}`,
-        title: titleMatch[1],
-        description: descMatch ? descMatch[1] : '',
+        id: `${prog['@channel']}-${startStr}`,
+        title: String(title),
+        description: String(description),
         start: startTime.toISOString(),
         end: endTime.toISOString(),
-        channel: channelMatch[1],
-        category: categoryMatch ? categoryMatch[1] : 'Général',
+        channel: prog['@channel'],
+        category: String(category),
         isLive: isLive,
       });
       
@@ -206,9 +207,9 @@ serve(async (req) => {
       channelNamesForEPG.add(ch.name.toLowerCase());
     });
 
-    // Fetch real EPG data from xmltvfr.fr (TNT only - much smaller file)
+    // Fetch real EPG data from xmltvfr.fr (full version)
     const programs = await parseEPGFromURL(
-      'https://xmltvfr.fr/xmltv/tnt.xml',
+      'https://xmltvfr.fr/xmltv/xmltv.xml',
       channelNamesForEPG
     );
     console.log(`Got ${programs.length} real EPG programs`);
