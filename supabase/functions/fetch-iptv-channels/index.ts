@@ -28,35 +28,6 @@ interface EPGProgram {
   isLive: boolean;
 }
 
-// Fetch EPG data from Supabase Storage
-async function getEPGFromStorage(): Promise<EPGProgram[]> {
-  try {
-    console.log('Fetching pre-parsed EPG from Supabase Storage...');
-    
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-
-    // Download EPG JSON from storage
-    const { data, error } = await supabase.storage
-      .from('epg-data')
-      .download('epg-programs.json');
-
-    if (error) {
-      console.error('Error downloading EPG from storage:', error);
-      return [];
-    }
-
-    const jsonText = await data.text();
-    const epgData = JSON.parse(jsonText);
-    
-    console.log(`Loaded ${epgData.total_programs} programs from storage (updated: ${epgData.updated_at})`);
-    return epgData.programs || [];
-  } catch (error) {
-    console.error('Error fetching EPG from storage:', error);
-    return [];
-  }
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -141,10 +112,6 @@ serve(async (req) => {
 
     console.log(`Filtered to ${relevantChannels.length} relevant channels with streams`);
 
-    // Fetch EPG data from pre-parsed JSON in Storage
-    const programs = await getEPGFromStorage();
-    console.log(`Loaded ${programs.length} EPG programs from storage`);
-
     // Group channels by category
     const categorizedChannels = {
       sports: relevantChannels.filter((ch: Channel) => 
@@ -179,7 +146,6 @@ serve(async (req) => {
         totalChannels: relevantChannels.length,
         channels: relevantChannels,
         categorized: categorizedChannels,
-        programs: programs,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

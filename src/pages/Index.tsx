@@ -8,6 +8,7 @@ import { DateFilter } from '@/components/DateFilter';
 import { Stats } from '@/components/Stats';
 import { Program, ProgramCategory } from '@/types/program';
 import { useIPTVChannels } from '@/hooks/useIPTVChannels';
+import { useEPGParser } from '@/hooks/useEPGParser';
 import { toast } from 'sonner';
 
 // Map EPG categories to our app categories
@@ -33,18 +34,25 @@ const Index = () => {
 
   // Fetch real IPTV channels
   const { data: iptvData, isLoading, error } = useIPTVChannels();
+  
+  // Parse EPG client-side
+  const { programs: epgPrograms, isLoading: epgLoading, error: epgError, reload: reloadEPG } = useEPGParser();
 
   useEffect(() => {
     if (error) {
       toast.error('Erreur lors du chargement des chaînes TV');
     } else if (iptvData) {
-      if (iptvData.totalChannels === 0) {
-        toast.warning('Aucune chaîne avec EPG disponible pour le moment');
-      } else {
-        toast.success(`${iptvData.totalChannels} chaînes avec EPG chargées !`);
-      }
+      toast.success(`${iptvData.totalChannels} chaînes chargées !`);
     }
   }, [iptvData, error]);
+
+  useEffect(() => {
+    if (epgError) {
+      toast.error(`Erreur EPG: ${epgError}`);
+    } else if (!epgLoading && epgPrograms.length > 0) {
+      toast.success(`${epgPrograms.length} programmes EPG chargés !`);
+    }
+  }, [epgPrograms, epgLoading, epgError]);
 
   // Get unique channels list from IPTV data
   const availableChannels = useMemo(() => {
@@ -65,13 +73,13 @@ const Index = () => {
     'Enfants',
   ];
 
-  // Convert EPG programs to our Program format - NO FALLBACK TO MOCK DATA
+  // Convert EPG programs to our Program format
   const programs = useMemo(() => {
-    if (!iptvData?.programs || iptvData.programs.length === 0) {
-      return []; // Return empty array if no real EPG data
+    if (!epgPrograms || epgPrograms.length === 0) {
+      return [];
     }
     
-    return iptvData.programs.map(epgProgram => ({
+    return epgPrograms.map(epgProgram => ({
       id: epgProgram.id,
       title: epgProgram.title,
       channel: epgProgram.channel,
@@ -79,11 +87,11 @@ const Index = () => {
       startTime: new Date(epgProgram.start).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       endTime: new Date(epgProgram.end).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
       description: epgProgram.description,
-      image: epgProgram.image || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=800&h=450&fit=crop',
+      image: 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=800&h=450&fit=crop',
       isLive: epgProgram.isLive,
       duration: Math.round((new Date(epgProgram.end).getTime() - new Date(epgProgram.start).getTime()) / 60000),
     }));
-  }, [iptvData]);
+  }, [epgPrograms]);
 
   const filteredPrograms = useMemo(() => {
     return programs.filter((program) => {
