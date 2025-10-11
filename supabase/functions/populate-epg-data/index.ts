@@ -127,108 +127,64 @@ serve(async (req) => {
 
     console.log('Channels inserted successfully');
 
-    // 2. Fetch and parse EPG XML from epg.pw (optimized version)
-    console.log('Fetching EPG XML from epg.pw...');
-    const epgResponse = await fetch('https://epg.pw/xmltv/epg_FR.xml.gz');
-    if (!epgResponse.ok) {
-      throw new Error(`Failed to fetch EPG: ${epgResponse.statusText}`);
-    }
-
-    const gzData = await epgResponse.arrayBuffer();
-    console.log(`Downloaded ${(gzData.byteLength / 1024 / 1024).toFixed(2)} MB`);
-
-    const decompressedStream = new Response(
-      new Blob([gzData]).stream().pipeThrough(new DecompressionStream('gzip'))
-    );
-    const xmlText = await decompressedStream.text();
-    console.log(`Decompressed to ${(xmlText.length / 1024 / 1024).toFixed(2)} MB`);
-
-    console.log('Parsing XML (limited processing to avoid timeout)...');
-    const xmlDoc: any = parse(xmlText);
-    
-    if (!xmlDoc.tv || !xmlDoc.tv.programme) {
-      throw new Error('No programme data found in XML');
-    }
-    
-    const programElements = Array.isArray(xmlDoc.tv.programme) 
-      ? xmlDoc.tv.programme 
-      : [xmlDoc.tv.programme];
+    // Generate demo programs for testing (waiting for epg.best authorization)
+    console.log('Generating demo EPG programs...');
     
     const now = new Date();
     const programs: EPGProgram[] = [];
-    const channelIds = new Set(channels.map(ch => ch.id));
-    const channelProgramCount = new Map<string, number>();
     
-    // DRASTICALLY REDUCED to avoid CPU timeout
-    const maxProgramsPerChannel = 3; // Reduced from 10
-    const maxTotalPrograms = 1000; // Hard limit to avoid timeout
+    const demoPrograms = [
+      { title: "Journal télévisé", category: "Actualités", duration: 30 },
+      { title: "Magazine sportif", category: "Sport", duration: 60 },
+      { title: "Film du soir", category: "Cinéma", duration: 120 },
+      { title: "Série policière", category: "Séries", duration: 50 },
+      { title: "Documentaire nature", category: "Documentaires", duration: 52 },
+      { title: "Dessins animés", category: "Enfants", duration: 25 },
+      { title: "Divertissement", category: "Divertissement", duration: 90 },
+      { title: "Météo", category: "Actualités", duration: 5 },
+      { title: "Émission culturelle", category: "Documentaires", duration: 45 },
+      { title: "Match en direct", category: "Sport", duration: 110 },
+    ];
 
-    console.log(`Found ${programElements.length} programme entries, filtering...`);
-
-    for (const prog of programElements) {
-      // Early exit if we hit our limit
-      if (programs.length >= maxTotalPrograms) {
-        console.log('Hit program limit, stopping parse early');
-        break;
-      }
-
-      const channelId = prog['@channel'];
-      if (!channelId || !channelIds.has(channelId)) continue;
-
-      const currentCount = channelProgramCount.get(channelId) || 0;
-      if (currentCount >= maxProgramsPerChannel) continue;
-
-      const startStr = prog['@start'];
-      const stopStr = prog['@stop'];
-      if (!startStr || !stopStr) continue;
-
-      const startTime = parseEPGDate(startStr);
-      const endTime = parseEPGDate(stopStr);
-
-      // Only keep current and next 24h programs
-      const twentyFourHoursLater = new Date(now.getTime() + 24 * 60 * 60 * 1000);
-      const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+    // Generate 5 programs per channel over 12 hours
+    for (const channel of channels.slice(0, 100)) { // First 100 channels only
+      let startTime = new Date(now.getTime() - 2 * 60 * 60 * 1000); // Start 2h ago
       
-      if (endTime < sixHoursAgo || startTime > twentyFourHoursLater) continue;
-
-      const title = prog.title?.['#text'] || prog.title;
-      if (!title) continue;
-
-      const description = prog.desc?.['#text'] || prog.desc || '';
-      const category = prog.category?.['#text'] || prog.category || 'Général';
-      const isLive = now >= startTime && now <= endTime;
-
-      programs.push({
-        id: `${channelId}-${startStr}`,
-        title: String(title),
-        description: String(description),
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-        channel_id: channelId,
-        category: String(category),
-        is_live: isLive,
-      });
-
-      channelProgramCount.set(channelId, currentCount + 1);
+      for (let i = 0; i < 5; i++) {
+        const demoProgram = demoPrograms[Math.floor(Math.random() * demoPrograms.length)];
+        const endTime = new Date(startTime.getTime() + demoProgram.duration * 60 * 1000);
+        const isLive = now >= startTime && now <= endTime;
+        
+        programs.push({
+          id: `${channel.id}-${startTime.getTime()}`,
+          title: demoProgram.title,
+          description: `Programme de démonstration en attendant l'accès à epg.best`,
+          start_time: startTime.toISOString(),
+          end_time: endTime.toISOString(),
+          channel_id: channel.id,
+          category: demoProgram.category,
+          is_live: isLive,
+        });
+        
+        startTime = endTime;
+      }
     }
 
-    console.log(`Parsed ${programs.length} programs total`);
+    console.log(`Generated ${programs.length} demo programs`);
 
-    // Delete old programs first
-    console.log('Deleting old programs...');
-    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+    // Delete old programs
     const { error: deleteError } = await supabase
       .from('programs')
       .delete()
-      .lt('end_time', sixHoursAgo.toISOString());
+      .lt('end_time', new Date(now.getTime() - 6 * 60 * 60 * 1000).toISOString());
 
     if (deleteError) {
       console.error('Error deleting old programs:', deleteError);
     }
 
-    // Insert programs in smaller batches
-    console.log('Inserting programs into database...');
-    const batchSize = 100; // Reduced batch size
+    // Insert demo programs
+    console.log('Inserting demo programs...');
+    const batchSize = 100;
     for (let i = 0; i < programs.length; i += batchSize) {
       const batch = programs.slice(i, i + batchSize);
       const { error: programError } = await supabase
@@ -236,22 +192,20 @@ serve(async (req) => {
         .upsert(batch, { onConflict: 'id' });
 
       if (programError) {
-        console.error(`Error inserting batch ${i / batchSize + 1}:`, programError);
+        console.error(`Error inserting batch:`, programError);
         throw programError;
       }
-
-      console.log(`Inserted batch ${i / batchSize + 1}/${Math.ceil(programs.length / batchSize)}`);
     }
 
-    console.log('EPG data populated successfully from epg.pw');
+    console.log('Demo EPG data populated successfully');
 
     return new Response(
       JSON.stringify({
         success: true,
         channelsCount: channels.length,
         programsCount: programs.length,
-        source: 'epg.pw (France - limited)',
-        note: 'Limited to 1000 programs to avoid timeout',
+        mode: 'demo',
+        note: 'Programmes de démonstration - En attente de l\'autorisation epg.best',
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
