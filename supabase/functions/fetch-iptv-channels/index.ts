@@ -150,20 +150,37 @@ serve(async (req) => {
 
     console.log(`Filtered to ${relevantChannels.length} relevant channels`);
 
-    // Fetch EPG data
+    // Fetch EPG data from working sources
     let programs: EPGProgram[] = [];
     try {
       console.log('Fetching EPG data...');
       
-      const epgResponse = await fetch('https://iptv-org.github.io/epg/guides/fr/programme-tv.com.epg.xml');
-      if (epgResponse.ok) {
-        const epgXml = await epgResponse.text();
-        console.log(`EPG XML size: ${epgXml.length} bytes`);
-        programs = parseEPG(epgXml, relevantChannels);
-        console.log(`Total EPG programs parsed: ${programs.length}`);
-      } else {
-        console.warn(`EPG fetch failed with status: ${epgResponse.status}`);
+      // Use epg.pw as a reliable EPG source for French channels
+      const epgSources = [
+        'https://iptv-org.github.io/epg/guides/fr/canalplus.fr.epg.xml',
+        'https://iptv-org.github.io/epg/guides/fr/sfr.fr.epg.xml',
+        'https://iptv-org.github.io/epg/guides/fr/orange.fr.epg.xml',
+      ];
+      
+      for (const epgUrl of epgSources) {
+        try {
+          console.log(`Trying EPG source: ${epgUrl}`);
+          const epgResponse = await fetch(epgUrl);
+          if (epgResponse.ok) {
+            const epgXml = await epgResponse.text();
+            console.log(`EPG XML size from ${epgUrl}: ${epgXml.length} bytes`);
+            const newPrograms = parseEPG(epgXml, relevantChannels);
+            programs.push(...newPrograms);
+            console.log(`Parsed ${newPrograms.length} programs from ${epgUrl}`);
+          } else {
+            console.warn(`EPG fetch failed with status: ${epgResponse.status} for ${epgUrl}`);
+          }
+        } catch (sourceError) {
+          console.warn(`Failed to fetch ${epgUrl}:`, sourceError);
+        }
       }
+      
+      console.log(`Total EPG programs parsed: ${programs.length}`);
     } catch (epgError) {
       console.error('Error fetching EPG data:', epgError);
     }
