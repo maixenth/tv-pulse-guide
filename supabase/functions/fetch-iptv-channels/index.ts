@@ -15,6 +15,84 @@ interface Channel {
   url: string;
 }
 
+interface EPGProgram {
+  id: string;
+  title: string;
+  description: string;
+  start: string;
+  end: string;
+  channel: string;
+  category: string;
+  image?: string;
+  isLive: boolean;
+}
+
+// Parse EPG XML data
+function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
+  const programs: EPGProgram[] = [];
+  const now = new Date();
+  
+  try {
+    // Simple XML parsing for programme tags
+    const programmeRegex = /<programme[^>]*>([\s\S]*?)<\/programme>/g;
+    const matches = xmlData.matchAll(programmeRegex);
+    
+    for (const match of matches) {
+      const programmeXml = match[0];
+      
+      // Extract attributes
+      const startMatch = programmeXml.match(/start="([^"]+)"/);
+      const endMatch = programmeXml.match(/stop="([^"]+)"/);
+      const channelMatch = programmeXml.match(/channel="([^"]+)"/);
+      
+      // Extract title
+      const titleMatch = programmeXml.match(/<title[^>]*>([^<]+)<\/title>/);
+      
+      // Extract description
+      const descMatch = programmeXml.match(/<desc[^>]*>([^<]+)<\/desc>/);
+      
+      // Extract category
+      const categoryMatch = programmeXml.match(/<category[^>]*>([^<]+)<\/category>/);
+      
+      if (startMatch && endMatch && channelMatch && titleMatch) {
+        const startTime = parseEPGDate(startMatch[1]);
+        const endTime = parseEPGDate(endMatch[1]);
+        const isLive = now >= startTime && now <= endTime;
+        
+        // Only include current and upcoming programs
+        if (endTime > now) {
+          programs.push({
+            id: `${channelMatch[1]}-${startMatch[1]}`,
+            title: titleMatch[1],
+            description: descMatch ? descMatch[1] : '',
+            start: startTime.toISOString(),
+            end: endTime.toISOString(),
+            channel: channelMatch[1],
+            category: categoryMatch ? categoryMatch[1] : 'Général',
+            isLive: isLive,
+          });
+        }
+      }
+    }
+  } catch (error) {
+    console.error('Error parsing EPG:', error);
+  }
+  
+  return programs.slice(0, 500); // Limit to 500 programs
+}
+
+// Parse EPG date format (YYYYMMDDHHMMSS +TZTZ)
+function parseEPGDate(epgDate: string): Date {
+  const year = parseInt(epgDate.substring(0, 4));
+  const month = parseInt(epgDate.substring(4, 6)) - 1;
+  const day = parseInt(epgDate.substring(6, 8));
+  const hour = parseInt(epgDate.substring(8, 10));
+  const minute = parseInt(epgDate.substring(10, 12));
+  const second = parseInt(epgDate.substring(12, 14));
+  
+  return new Date(year, month, day, hour, minute, second);
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -58,6 +136,19 @@ serve(async (req) => {
 
     console.log(`Filtered to ${relevantChannels.length} relevant channels`);
 
+    // Fetch EPG data from IPTV-org
+    let programs: EPGProgram[] = [];
+    try {
+      const epgResponse = await fetch('https://iptv-org.github.io/epg/guides/fr/programme-tv.com.epg.xml');
+      if (epgResponse.ok) {
+        const epgXml = await epgResponse.text();
+        programs = parseEPG(epgXml, relevantChannels);
+        console.log(`Parsed ${programs.length} EPG programs`);
+      }
+    } catch (epgError) {
+      console.warn('Could not fetch EPG data:', epgError);
+    }
+
     // Group channels by category
     const categorizedChannels = {
       sports: relevantChannels.filter(ch => 
@@ -92,6 +183,7 @@ serve(async (req) => {
         totalChannels: relevantChannels.length,
         channels: relevantChannels,
         categorized: categorizedChannels,
+        programs: programs,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

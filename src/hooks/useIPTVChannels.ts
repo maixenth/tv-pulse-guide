@@ -11,10 +11,23 @@ interface IPTVChannel {
   url: string;
 }
 
+interface EPGProgram {
+  id: string;
+  title: string;
+  description: string;
+  start: string;
+  end: string;
+  channel: string;
+  category: string;
+  image?: string;
+  isLive: boolean;
+}
+
 interface IPTVResponse {
   success: boolean;
   totalChannels: number;
   channels: IPTVChannel[];
+  programs: EPGProgram[];
   categorized: {
     sports: IPTVChannel[];
     news: IPTVChannel[];

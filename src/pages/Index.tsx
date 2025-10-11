@@ -11,6 +11,18 @@ import { Program, ProgramCategory } from '@/types/program';
 import { useIPTVChannels } from '@/hooks/useIPTVChannels';
 import { toast } from 'sonner';
 
+// Map EPG categories to our app categories
+const mapEPGCategory = (epgCategory: string): ProgramCategory => {
+  const cat = epgCategory.toLowerCase();
+  if (cat.includes('sport')) return 'Sport';
+  if (cat.includes('film') || cat.includes('movie') || cat.includes('cinéma')) return 'Cinéma';
+  if (cat.includes('série') || cat.includes('series')) return 'Séries';
+  if (cat.includes('news') || cat.includes('info') || cat.includes('actualité')) return 'Actualités';
+  if (cat.includes('enfant') || cat.includes('jeunesse') || cat.includes('kids')) return 'Enfants';
+  if (cat.includes('documentaire') || cat.includes('documentary')) return 'Documentaires';
+  return 'Divertissement';
+};
+
 const Index = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ProgramCategory | 'Tous'>('Tous');
@@ -54,8 +66,28 @@ const Index = () => {
     'Enfants',
   ];
 
+  // Convert EPG programs to our Program format
+  const programs = useMemo(() => {
+    if (!iptvData?.programs || iptvData.programs.length === 0) {
+      return mockPrograms; // Fallback to mock data if no EPG data
+    }
+    
+    return iptvData.programs.map(epgProgram => ({
+      id: epgProgram.id,
+      title: epgProgram.title,
+      channel: epgProgram.channel,
+      category: mapEPGCategory(epgProgram.category),
+      startTime: new Date(epgProgram.start).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      endTime: new Date(epgProgram.end).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      description: epgProgram.description,
+      image: epgProgram.image || 'https://images.unsplash.com/photo-1522869635100-9f4c5e86aa37?w=800&h=450&fit=crop',
+      isLive: epgProgram.isLive,
+      duration: Math.round((new Date(epgProgram.end).getTime() - new Date(epgProgram.start).getTime()) / 60000),
+    }));
+  }, [iptvData]);
+
   const filteredPrograms = useMemo(() => {
-    return mockPrograms.filter((program) => {
+    return programs.filter((program) => {
       const matchesCategory =
         selectedCategory === 'Tous' || program.category === selectedCategory;
       
@@ -70,7 +102,7 @@ const Index = () => {
 
       return matchesCategory && matchesChannel && matchesSearch;
     });
-  }, [searchQuery, selectedCategory, selectedChannel]);
+  }, [programs, searchQuery, selectedCategory, selectedChannel]);
 
   const livePrograms = useMemo(() => {
     return filteredPrograms.filter(p => p.isLive).length;
@@ -119,7 +151,7 @@ const Index = () => {
           <>
             <Stats 
               totalChannels={availableChannels.length}
-              totalPrograms={mockPrograms.length}
+              totalPrograms={programs.length}
               livePrograms={livePrograms}
             />
 
@@ -137,12 +169,12 @@ const Index = () => {
 
         <div className="mb-6">
           <h2 className="text-3xl font-bold text-foreground mb-2">
-            {selectedCategory === 'Tous' ? 'Programmes disponibles' : selectedCategory}
+            {selectedCategory === 'Tous' ? 'Programmes TV en direct' : selectedCategory}
             {selectedChannel !== 'all' && ` - ${selectedChannel}`}
           </h2>
           <p className="text-muted-foreground">
             {filteredPrograms.length} programme{filteredPrograms.length > 1 ? 's' : ''} trouvé
-            {filteredPrograms.length > 1 ? 's' : ''}
+            {filteredPrograms.length > 1 ? 's' : ''} • Données EPG en temps réel
           </p>
         </div>
 
