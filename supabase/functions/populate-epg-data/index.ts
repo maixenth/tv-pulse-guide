@@ -127,51 +127,132 @@ serve(async (req) => {
 
     console.log('Channels inserted successfully');
 
-    // Simple demo programs generation (minimal processing)
-    const now = new Date();
-    const programs: EPGProgram[] = [];
-    
-    // Only process first 50 channels to stay under CPU limit
-    const limitedChannels = channels.slice(0, 50);
-    
-    for (const channel of limitedChannels) {
-      let startTime = new Date(now.getTime() - 60 * 60 * 1000); // 1h ago
-      
-      // Only 3 programs per channel
-      for (let i = 0; i < 3; i++) {
-        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000); // 1h duration
-        
-        programs.push({
-          id: `${channel.id}-${i}`,
-          title: `Programme ${i + 1}`,
-          description: 'Démo',
-          start_time: startTime.toISOString(),
-          end_time: endTime.toISOString(),
-          channel_id: channel.id,
-          category: 'Général',
-          is_live: now >= startTime && now <= endTime,
-        });
-        
-        startTime = endTime;
-      }
+    // 2. Fetch and parse EPG XML from epg.pw
+    console.log('Fetching EPG XML from epg.pw...');
+    const epgResponse = await fetch('https://epg.pw/xmltv/epg_FR.xml.gz');
+    if (!epgResponse.ok) {
+      throw new Error(`Failed to fetch EPG: ${epgResponse.statusText}`);
     }
 
-    // Quick insert
-    if (programs.length > 0) {
-      const { error } = await supabase
-        .from('programs')
-        .upsert(programs, { onConflict: 'id' });
-      
-      if (error) console.error('Insert error:', error);
+    const gzData = await epgResponse.arrayBuffer();
+    console.log(`Downloaded ${(gzData.byteLength / 1024 / 1024).toFixed(2)} MB`);
+
+    const decompressedStream = new Response(
+      new Blob([gzData]).stream().pipeThrough(new DecompressionStream('gzip'))
+    );
+    const xmlText = await decompressedStream.text();
+    console.log(`Decompressed to ${(xmlText.length / 1024 / 1024).toFixed(2)} MB`);
+
+    console.log('Parsing XML...');
+    const xmlDoc: any = parse(xmlText);
+    
+    if (!xmlDoc.tv || !xmlDoc.tv.programme) {
+      throw new Error('No programme data found in XML');
     }
+    
+    const programElements = Array.isArray(xmlDoc.tv.programme) 
+      ? xmlDoc.tv.programme 
+      : [xmlDoc.tv.programme];
+    
+    const now = new Date();
+    const programs: EPGProgram[] = [];
+    const channelIds = new Set(channels.map(ch => ch.id));
+    const channelProgramCount = new Map<string, number>();
+    const maxProgramsPerChannel = 10;
+
+    console.log(`Found ${programElements.length} programme entries, filtering for our channels...`);
+
+    for (const prog of programElements) {
+      const channelId = prog['@channel'];
+      if (!channelId || !channelIds.has(channelId)) continue;
+
+      const currentCount = channelProgramCount.get(channelId) || 0;
+      if (currentCount >= maxProgramsPerChannel) continue;
+
+      const startStr = prog['@start'];
+      const stopStr = prog['@stop'];
+      if (!startStr || !stopStr) continue;
+
+      const startTime = parseEPGDate(startStr);
+      const endTime = parseEPGDate(stopStr);
+
+      // Only keep current and next 48h programs
+      const fortyEightHoursLater = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+      const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+      
+      if (endTime < sixHoursAgo || startTime > fortyEightHoursLater) continue;
+
+      const title = prog.title?.['#text'] || prog.title;
+      if (!title) continue;
+
+      const description = prog.desc?.['#text'] || prog.desc || '';
+      const category = prog.category?.['#text'] || prog.category || 'Général';
+      const isLive = now >= startTime && now <= endTime;
+
+      programs.push({
+        id: `${channelId}-${startStr}`,
+        title: String(title),
+        description: String(description),
+        start_time: startTime.toISOString(),
+        end_time: endTime.toISOString(),
+        channel_id: channelId,
+        category: String(category),
+        is_live: isLive,
+      });
+
+      channelProgramCount.set(channelId, currentCount + 1);
+
+      if (programs.length % 500 === 0) {
+        console.log(`Parsed ${programs.length} programs...`);
+      }
+
+      // Safety limit
+      if (programs.length >= 5000) break;
+    }
+
+    console.log(`Parsed ${programs.length} programs total`);
+
+    // Delete old programs first
+    console.log('Deleting old programs...');
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+    const { error: deleteError } = await supabase
+      .from('programs')
+      .delete()
+      .lt('end_time', sixHoursAgo.toISOString());
+
+    if (deleteError) {
+      console.error('Error deleting old programs:', deleteError);
+    }
+
+    // Insert programs in smaller batches
+    console.log('Inserting programs into database...');
+    const batchSize = 250;
+    for (let i = 0; i < programs.length; i += batchSize) {
+      const batch = programs.slice(i, i + batchSize);
+      const { error: programError } = await supabase
+        .from('programs')
+        .upsert(batch, { onConflict: 'id' });
+
+      if (programError) {
+        console.error(`Error inserting batch ${i / batchSize + 1}:`, programError);
+        throw programError;
+      }
+
+      console.log(`Inserted batch ${i / batchSize + 1}/${Math.ceil(programs.length / batchSize)}`);
+    }
+
+    console.log('EPG data populated successfully from epg.pw');
 
     return new Response(
       JSON.stringify({
         success: true,
         channelsCount: channels.length,
         programsCount: programs.length,
+        source: 'epg.pw (France)',
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
   } catch (error) {
     console.error('Error populating EPG data:', error);

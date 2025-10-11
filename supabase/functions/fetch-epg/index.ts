@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { parse } from "https://deno.land/x/xml@2.1.3/mod.ts";
 
 const corsHeaders = {
@@ -36,75 +35,67 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Starting EPG update process...');
+    console.log('Fetching EPG XML.GZ from epg.best...');
     
-    // Initialize Supabase client with service role key for storage write access
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Fetch compressed EPG file (.gz version - 0.83 MB)
-    console.log('Fetching EPG XML.GZ from xmltvfr.fr (TNT France)...');
-    const epgResponse = await fetch('https://xmltvfr.fr/xmltv/xmltv_tnt.xml.gz');
-    
-    if (!epgResponse.ok) {
-      throw new Error(`Failed to fetch EPG: ${epgResponse.status}`);
+    // Download gzipped XML
+    const response = await fetch('https://epg.best/260a6-gtcznu.xml.gz');
+    if (!response.ok) {
+      throw new Error(`Failed to download EPG: ${response.status}`);
     }
 
-    // Get gzipped data and decompress using native DecompressionStream
-    const gzData = await epgResponse.arrayBuffer();
-    console.log(`GZ size: ${gzData.byteLength} bytes`);
-    
-    console.log('Decompressing XML.GZ...');
+    const gzData = await response.arrayBuffer();
+    console.log(`Downloaded ${(gzData.byteLength / 1024).toFixed(2)} KB`);
+
+    // Decompress using DecompressionStream
     const decompressedStream = new Response(
       new Blob([gzData]).stream().pipeThrough(new DecompressionStream('gzip'))
     );
     const xmlText = await decompressedStream.text();
-    console.log(`EPG XML size: ${xmlText.length} bytes`);
+    console.log(`Decompressed to ${(xmlText.length / 1024).toFixed(2)} KB`);
 
-    // Parse XML to JSON
-    console.log('Parsing XML to JSON...');
-    const doc: any = parse(xmlText);
-    const now = new Date();
-    const programs: EPGProgram[] = [];
+    // Parse XML
+    console.log('Parsing XML...');
+    const xmlDoc: any = parse(xmlText);
     
-    const tv = doc.tv;
-    if (!tv || !tv.programme) {
+    if (!xmlDoc.tv || !xmlDoc.tv.programme) {
       throw new Error('No programme data found in XML');
     }
     
-    const programmes = Array.isArray(tv.programme) ? tv.programme : [tv.programme];
-    console.log(`Found ${programmes.length} programme entries`);
+    const programElements = Array.isArray(xmlDoc.tv.programme) 
+      ? xmlDoc.tv.programme 
+      : [xmlDoc.tv.programme];
     
-    // Process all programs from TNT (no need to limit as file is smaller)
+    const now = new Date();
+    const programs: EPGProgram[] = [];
     const channelProgramCount = new Map<string, number>();
-    const maxProgramsPerChannel = 10; // More programs per channel for TNT
-    
-    for (const prog of programmes) {
+    const maxProgramsPerChannel = 10;
+
+    console.log(`Found ${programElements.length} programme entries`);
+
+    for (const prog of programElements) {
       const channelId = prog['@channel'];
       if (!channelId) continue;
-      
+
       const channelIdLower = channelId.toLowerCase();
       if ((channelProgramCount.get(channelIdLower) || 0) >= maxProgramsPerChannel) continue;
-      
+
       const startStr = prog['@start'];
       const stopStr = prog['@stop'];
       if (!startStr || !stopStr) continue;
-      
+
       const startTime = parseEPGDate(startStr);
       const endTime = parseEPGDate(stopStr);
-      
-      // Only keep current and upcoming programs (not past)
+
+      // Only keep current and upcoming programs
       if (endTime < now) continue;
-      
+
       const title = prog.title?.['#text'] || prog.title;
       if (!title) continue;
-      
+
       const description = prog.desc?.['#text'] || prog.desc || '';
       const category = prog.category?.['#text'] || prog.category || 'Général';
-      
       const isLive = now >= startTime && now <= endTime;
-      
+
       programs.push({
         id: `${channelId}-${startStr}`,
         title: String(title),
@@ -113,57 +104,29 @@ serve(async (req) => {
         end: endTime.toISOString(),
         channel: channelId,
         category: String(category),
-        isLive: isLive,
+        isLive,
       });
-      
+
       channelProgramCount.set(channelIdLower, (channelProgramCount.get(channelIdLower) || 0) + 1);
-      
-      // Keep more programs for TNT as file is smaller
-      if (programs.length >= 10000) break;
-    }
-    
-    console.log(`Parsed ${programs.length} EPG programs`);
 
-    // Convert to JSON
-    const epgData = {
-      updated_at: new Date().toISOString(),
-      total_programs: programs.length,
-      programs: programs,
-    };
-    
-    const jsonContent = JSON.stringify(epgData);
-    console.log(`JSON size: ${jsonContent.length} bytes`);
-
-    // Upload to Supabase Storage
-    console.log('Uploading to Supabase Storage...');
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('epg-data')
-      .upload('epg-programs.json', jsonContent, {
-        contentType: 'application/json',
-        upsert: true, // Overwrite if exists
-      });
-
-    if (uploadError) {
-      console.error('Upload error:', uploadError);
-      throw uploadError;
+      // Limit to avoid timeout
+      if (programs.length >= 2000) break;
     }
 
-    console.log('EPG update completed successfully');
+    console.log(`Parsed ${programs.length} programs`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: 'EPG data updated successfully',
-        total_programs: programs.length,
-        file_size_bytes: jsonContent.length,
-        updated_at: epgData.updated_at,
+        programs,
+        total: programs.length,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
   } catch (error) {
-    console.error('Error updating EPG:', error);
+    console.error('Error fetching EPG:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     return new Response(
       JSON.stringify({
@@ -177,3 +140,4 @@ serve(async (req) => {
     );
   }
 });
+
