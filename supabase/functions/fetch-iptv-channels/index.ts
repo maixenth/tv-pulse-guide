@@ -94,11 +94,24 @@ serve(async (req) => {
     const streamsData = streamsResponse.ok ? await streamsResponse.json() : [];
     console.log(`Fetched ${streamsData.length} streams`);
 
+    // Fetch logos
+    const logosResponse = await fetch('https://iptv-org.github.io/api/logos.json');
+    const logosData = logosResponse.ok ? await logosResponse.json() : [];
+    console.log(`Fetched ${logosData.length} logos`);
+
     // Create a map of channel -> stream URL
     const streamMap = new Map();
     streamsData.forEach((stream: any) => {
       if (stream.channel && stream.url && !streamMap.has(stream.channel)) {
         streamMap.set(stream.channel, stream.url);
+      }
+    });
+
+    // Create a map of channel -> logo URL
+    const logoMap = new Map();
+    logosData.forEach((logo: any) => {
+      if (logo.channel && logo.url && !logoMap.has(logo.channel)) {
+        logoMap.set(logo.channel, logo.url);
       }
     });
 
@@ -125,7 +138,7 @@ serve(async (req) => {
       .map((channel: any) => ({
         id: channel.id,
         name: channel.name,
-        logo: `https://iptv-org.github.io/iptv/channels/${channel.id}.png`,
+        logo: logoMap.get(channel.id) || 'https://via.placeholder.com/150?text=No+Logo',
         country: channel.country || '',
         categories: channel.categories || [],
         languages: channel.languages || [],
