@@ -155,9 +155,9 @@ serve(async (req) => {
     try {
       console.log('Fetching EPG data from xmltvfr.fr...');
       
-      // Use xmltvfr.fr as the primary EPG source - reliable and complete French EPG
+      // Use xmltvfr.fr as the primary EPG source - reliable and complete French EPG (non-compressed version)
       const epgSources = [
-        'https://xmltvfr.fr/xmltv/xmltv.xml.gz',
+        'https://xmltvfr.fr/xmltv/xmltv.xml',
       ];
       
       for (const epgUrl of epgSources) {
