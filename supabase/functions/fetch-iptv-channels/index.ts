@@ -160,9 +160,9 @@ serve(async (req) => {
     try {
       console.log('Fetching EPG data from xmltvfr.fr...');
       
-      // Use xmltvfr.fr as the primary EPG source - reliable and complete French EPG (non-compressed version)
+      // Use TNT France EPG only - much smaller file (27 channels vs 774)
       const epgSources = [
-        'https://xmltvfr.fr/xmltv/xmltv.xml',
+        'https://xmltvfr.fr/xmltv/tnt.xml',
       ];
       
       for (const epgUrl of epgSources) {
