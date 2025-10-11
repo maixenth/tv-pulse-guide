@@ -43,9 +43,9 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch EPG XML
-    console.log('Fetching EPG XML from xmltvfr.fr...');
-    const epgResponse = await fetch('https://xmltvfr.fr/xmltv/xmltv.xml');
+    // Fetch EPG XML (using TNT France which is much smaller)
+    console.log('Fetching EPG XML from xmltvfr.fr (TNT France)...');
+    const epgResponse = await fetch('https://xmltvfr.fr/xmltv/tnt.xml');
     
     if (!epgResponse.ok) {
       throw new Error(`Failed to fetch EPG: ${epgResponse.status}`);
@@ -68,9 +68,9 @@ serve(async (req) => {
     const programmes = Array.isArray(tv.programme) ? tv.programme : [tv.programme];
     console.log(`Found ${programmes.length} programme entries`);
     
-    // Limit to 3 programs per channel to reduce size
+    // Process all programs from TNT (no need to limit as file is smaller)
     const channelProgramCount = new Map<string, number>();
-    const maxProgramsPerChannel = 3;
+    const maxProgramsPerChannel = 10; // More programs per channel for TNT
     
     for (const prog of programmes) {
       const channelId = prog['@channel'];
@@ -110,8 +110,8 @@ serve(async (req) => {
       
       channelProgramCount.set(channelIdLower, (channelProgramCount.get(channelIdLower) || 0) + 1);
       
-      // Limit total programs to avoid too large JSON
-      if (programs.length >= 5000) break;
+      // Keep more programs for TNT as file is smaller
+      if (programs.length >= 10000) break;
     }
     
     console.log(`Parsed ${programs.length} EPG programs`);
