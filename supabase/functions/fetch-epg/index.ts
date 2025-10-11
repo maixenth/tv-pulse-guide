@@ -35,10 +35,10 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Fetching EPG XML.GZ from xmltvfr.fr...');
+    console.log('Fetching EPG XML.GZ from epg.best...');
     
     // Download gzipped XML
-    const response = await fetch('https://xmltvfr.fr/xmltv/xmltv_tnt.xml.gz');
+    const response = await fetch('https://epg.best/260a6-gtcznu.xml.gz');
     if (!response.ok) {
       throw new Error(`Failed to download EPG: ${response.status}`);
     }

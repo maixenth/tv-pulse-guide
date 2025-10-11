@@ -35,116 +35,90 @@ serve(async (req) => {
   }
 
   try {
-    console.log('Fetching IPTV data from iptv-org API...');
+    console.log('Fetching M3U playlist from epg.best...');
     
-    // Fetch channels from iptv-org API
-    const channelsResponse = await fetch('https://iptv-org.github.io/api/channels.json');
+    // Fetch M3U playlist
+    const m3uResponse = await fetch('https://epg.best/48b22-gtcznu.m3u');
     
-    if (!channelsResponse.ok) {
-      throw new Error(`Failed to fetch channels: ${channelsResponse.statusText}`);
+    if (!m3uResponse.ok) {
+      throw new Error(`Failed to fetch M3U: ${m3uResponse.statusText}`);
     }
 
-    const allChannelsData = await channelsResponse.json();
-    console.log(`Fetched ${allChannelsData.length} total channels from iptv-org`);
+    const m3uText = await m3uResponse.text();
+    console.log(`Downloaded M3U: ${(m3uText.length / 1024).toFixed(2)} KB`);
 
-    // Fetch streams to get URLs
-    const streamsResponse = await fetch('https://iptv-org.github.io/api/streams.json');
-    const streamsData = streamsResponse.ok ? await streamsResponse.json() : [];
-    console.log(`Fetched ${streamsData.length} streams`);
+    // Parse M3U format
+    const lines = m3uText.split('\n');
+    const channels: Channel[] = [];
+    let currentChannel: Partial<Channel> | null = null;
 
-    // Fetch logos
-    const logosResponse = await fetch('https://iptv-org.github.io/api/logos.json');
-    const logosData = logosResponse.ok ? await logosResponse.json() : [];
-    console.log(`Fetched ${logosData.length} logos`);
-
-    // Create a map of channel -> stream URL
-    const streamMap = new Map();
-    streamsData.forEach((stream: any) => {
-      if (stream.channel && stream.url && !streamMap.has(stream.channel)) {
-        streamMap.set(stream.channel, stream.url);
-      }
-    });
-
-    // Create a map of channel -> logo URL
-    const logoMap = new Map();
-    logosData.forEach((logo: any) => {
-      if (logo.channel && logo.url && !logoMap.has(logo.channel)) {
-        logoMap.set(logo.channel, logo.url);
-      }
-    });
-
-    // Filter STRICTLY for francophone and African channels only
-    const relevantChannels = allChannelsData
-      .filter((channel: any) => {
-        // Strict francophone language filter
-        const isFrancophone = channel.languages?.some((lang: string) => 
-          ['fra', 'fre'].includes(lang.toLowerCase())
-        );
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Parse #EXTINF line
+      if (line.startsWith('#EXTINF:')) {
+        const tvgIdMatch = line.match(/tvg-id="([^"]+)"/);
+        const tvgNameMatch = line.match(/tvg-name="([^"]+)"/);
+        const tvgLogoMatch = line.match(/tvg-logo="([^"]+)"/);
+        const groupTitleMatch = line.match(/group-title="([^"]+)"/);
         
-        // Strict francophone + African countries only
-        const isRelevantCountry = channel.country && [
-          // France, Belgium, Switzerland, Canada (francophone regions)
-          'fr', 'be', 'ch', 'ca',
-          // Maghreb (francophone)
-          'dz', 'ma', 'tn',
-          // West Africa (francophone)
-          'sn', 'ci', 'cm', 'bf', 'ml', 'ne', 'tg', 'bj', 'gn',
-          // Central Africa (francophone)
-          'cd', 'cg', 'ga', 'cf', 'td',
-          // East Africa (francophone)
-          'rw', 'bi', 'dj',
-          // Indian Ocean (francophone)
-          'mg', 'km', 'sc', 'mu'
-        ].includes(channel.country.toLowerCase());
+        // Extract channel name (after last comma)
+        const nameMatch = line.split(',').pop();
+        
+        currentChannel = {
+          id: tvgIdMatch?.[1] || `ch-${channels.length}`,
+          name: nameMatch?.trim() || tvgNameMatch?.[1] || 'Unknown',
+          logo: tvgLogoMatch?.[1] || 'https://via.placeholder.com/150?text=No+Logo',
+          country: '',
+          categories: groupTitleMatch?.[1] ? [groupTitleMatch[1]] : [],
+          languages: ['fra'],
+          url: '',
+        };
+      }
+      // Parse URL line
+      else if (line && !line.startsWith('#') && currentChannel) {
+        currentChannel.url = line;
+        channels.push(currentChannel as Channel);
+        currentChannel = null;
+      }
+    }
 
-        // Always include if francophone OR from relevant country OR has stream
-        return (isFrancophone || isRelevantCountry) && streamMap.has(channel.id);
-      })
-      .map((channel: any) => ({
-        id: channel.id,
-        name: channel.name,
-        logo: logoMap.get(channel.id) || 'https://via.placeholder.com/150?text=No+Logo',
-        country: channel.country || '',
-        categories: channel.categories || [],
-        languages: channel.languages || [],
-        url: streamMap.get(channel.id) || '',
-      }));
-
-    console.log(`Filtered to ${relevantChannels.length} relevant channels with streams`);
+    console.log(`Parsed ${channels.length} channels from M3U`);
 
     // Group channels by category
     const categorizedChannels = {
-      sports: relevantChannels.filter((ch: Channel) => 
+      sports: channels.filter((ch: Channel) => 
         ch.categories?.some(cat => cat.toLowerCase().includes('sport'))
       ),
-      news: relevantChannels.filter((ch: Channel) => 
-        ch.categories?.some(cat => cat.toLowerCase().includes('news'))
+      news: channels.filter((ch: Channel) => 
+        ch.categories?.some(cat => cat.toLowerCase().includes('news') || cat.toLowerCase().includes('actualit'))
       ),
-      entertainment: relevantChannels.filter((ch: Channel) => 
+      entertainment: channels.filter((ch: Channel) => 
         ch.categories?.some(cat => 
           cat.toLowerCase().includes('entertainment') || 
-          cat.toLowerCase().includes('general')
+          cat.toLowerCase().includes('general') ||
+          cat.toLowerCase().includes('divertissement')
         )
       ),
-      kids: relevantChannels.filter((ch: Channel) => 
-        ch.categories?.some(cat => cat.toLowerCase().includes('kids'))
+      kids: channels.filter((ch: Channel) => 
+        ch.categories?.some(cat => cat.toLowerCase().includes('kids') || cat.toLowerCase().includes('enfant'))
       ),
-      movies: relevantChannels.filter((ch: Channel) => 
-        ch.categories?.some(cat => cat.toLowerCase().includes('movie'))
+      movies: channels.filter((ch: Channel) => 
+        ch.categories?.some(cat => cat.toLowerCase().includes('movie') || cat.toLowerCase().includes('cinéma') || cat.toLowerCase().includes('film'))
       ),
-      series: relevantChannels.filter((ch: Channel) => 
-        ch.categories?.some(cat => cat.toLowerCase().includes('series'))
+      series: channels.filter((ch: Channel) => 
+        ch.categories?.some(cat => cat.toLowerCase().includes('series') || cat.toLowerCase().includes('série'))
       ),
-      documentary: relevantChannels.filter((ch: Channel) => 
-        ch.categories?.some(cat => cat.toLowerCase().includes('documentary'))
+      documentary: channels.filter((ch: Channel) => 
+        ch.categories?.some(cat => cat.toLowerCase().includes('documentary') || cat.toLowerCase().includes('documentaire'))
       ),
     };
 
     return new Response(
       JSON.stringify({
         success: true,
-        totalChannels: relevantChannels.length,
-        channels: relevantChannels,
+        totalChannels: channels.length,
+        channels: channels,
         categorized: categorizedChannels,
       }),
       {
