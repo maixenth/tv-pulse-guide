@@ -150,16 +150,14 @@ serve(async (req) => {
 
     console.log(`Filtered to ${relevantChannels.length} relevant channels`);
 
-    // Fetch EPG data from working sources
+    // Fetch EPG data from reliable source
     let programs: EPGProgram[] = [];
     try {
-      console.log('Fetching EPG data...');
+      console.log('Fetching EPG data from xmltvfr.fr...');
       
-      // Use epg.pw as a reliable EPG source for French channels
+      // Use xmltvfr.fr as the primary EPG source - reliable and complete French EPG
       const epgSources = [
-        'https://iptv-org.github.io/epg/guides/fr/canalplus.fr.epg.xml',
-        'https://iptv-org.github.io/epg/guides/fr/sfr.fr.epg.xml',
-        'https://iptv-org.github.io/epg/guides/fr/orange.fr.epg.xml',
+        'https://xmltvfr.fr/xmltv/xmltv.xml.gz',
       ];
       
       for (const epgUrl of epgSources) {
