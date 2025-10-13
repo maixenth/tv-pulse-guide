@@ -97,14 +97,26 @@ function parseEPG(xmlData: string, channels: Channel[]): EPGProgram[] {
 
 // Parse EPG date format (YYYYMMDDHHMMSS +TZTZ)
 function parseEPGDate(epgDate: string): Date {
-  const year = parseInt(epgDate.substring(0, 4));
-  const month = parseInt(epgDate.substring(4, 6)) - 1;
-  const day = parseInt(epgDate.substring(6, 8));
-  const hour = parseInt(epgDate.substring(8, 10));
-  const minute = parseInt(epgDate.substring(10, 12));
-  const second = parseInt(epgDate.substring(12, 14));
-  
-  return new Date(year, month, day, hour, minute, second);
+    const year = parseInt(epgDate.substring(0, 4));
+    const month = parseInt(epgDate.substring(4, 6)) - 1;
+    const day = parseInt(epgDate.substring(6, 8));
+    const hour = parseInt(epgDate.substring(8, 10));
+    const minute = parseInt(epgDate.substring(10, 12));
+    const second = parseInt(epgDate.substring(12, 14));
+
+    const date = new Date(Date.UTC(year, month, day, hour, minute, second));
+
+    const tzMatch = epgDate.match(/([+-])(\d{2})(\d{2})$/);
+    if (tzMatch) {
+        const sign = tzMatch[1] === '-' ? -1 : 1;
+        const tzHour = parseInt(tzMatch[2]);
+        const tzMinute = parseInt(tzMatch[3]);
+        const offset = (tzHour * 60 + tzMinute) * 60 * 1000;
+        // Adjust the date by subtracting the offset, as we parsed it as UTC
+        date.setTime(date.getTime() - (sign * offset));
+    }
+
+    return date;
 }
 
 serve(async (req) => {
@@ -185,15 +197,37 @@ serve(async (req) => {
       console.error('Error fetching EPG data:', epgError);
     }
 
-    // ONLY keep channels that have EPG programs
-    const channelsWithPrograms = new Set(programs.map(p => p.channel));
-    console.log(`Channels with EPG data: ${channelsWithPrograms.size}`);
-    
-    const filteredChannels = relevantChannels.filter(ch => 
-      channelsWithPrograms.has(ch.name) || channelsWithPrograms.has(ch.id)
-    );
-    
+    // Create a map of program channels for efficient lookup
+    const programChannelNames = new Set(programs.map(p => p.channel.toLowerCase()));
+    console.log(`Unique channel names with EPG data: ${programChannelNames.size}`);
+
+    // Improved filtering: Keep a channel if its name is found in the EPG data
+    const filteredChannels = relevantChannels.filter(ch => {
+      const channelNameLower = ch.name.toLowerCase();
+      // Check if any program channel name includes the channel's name, or vice-versa
+      for (const progChannel of programChannelNames) {
+        if (progChannel.includes(channelNameLower) || channelNameLower.includes(progChannel)) {
+          return true;
+        }
+      }
+      return false;
+    });
+
     console.log(`Filtered to ${filteredChannels.length} channels with EPG (from ${relevantChannels.length} total)`);
+
+    // Further filter programs to only those belonging to the filtered channels
+    const finalChannelNames = new Set(filteredChannels.map(ch => ch.name.toLowerCase()));
+    const finalPrograms = programs.filter(p => {
+        const programChannelLower = p.channel.toLowerCase();
+        for (const finalChannel of finalChannelNames) {
+            if (programChannelLower.includes(finalChannel) || finalChannel.includes(programChannelLower)) {
+                return true;
+            }
+        }
+        return false;
+    });
+
+    console.log(`Final program count: ${finalPrograms.length}`);
 
 
     // Group channels by category
