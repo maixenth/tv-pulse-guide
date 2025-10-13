@@ -1,13 +1,10 @@
 import { Search, Heart, Tv, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-<<<<<<< HEAD
 import { ModeToggle } from '@/components/theme-toggle';
-=======
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
->>>>>>> 28f7540cea0c6752b27c4597b1f1c0e7b07dc221
 
 interface HeaderProps {
   searchQuery: string;
@@ -49,7 +46,6 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderPr
     }
   };
 
-
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border">
       <div className="container mx-auto px-4 py-4">
@@ -77,8 +73,6 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderPr
           </div>
 
           <div className="flex items-center gap-2">
-<<<<<<< HEAD
-=======
             <Button
               onClick={handleReloadEPG}
               disabled={isUpdating}
@@ -89,8 +83,6 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderPr
               <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
               {isUpdating ? 'Mise à jour...' : 'MAJ EPG'}
             </Button>
-
->>>>>>> 28f7540cea0c6752b27c4597b1f1c0e7b07dc221
             <button className="relative p-2 rounded-lg hover:bg-card transition-colors">
               <Heart className="w-6 h-6 text-foreground" />
               {favoritesCount > 0 && (
@@ -99,10 +91,7 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderPr
                 </span>
               )}
             </button>
-<<<<<<< HEAD
             <ModeToggle />
-=======
->>>>>>> 28f7540cea0c6752b27c4597b1f1c0e7b07dc221
           </div>
         </div>
       </div>
