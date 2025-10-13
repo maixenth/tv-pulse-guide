@@ -14,7 +14,81 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      channels: {
+        Row: {
+          categories: string[] | null
+          country: string | null
+          created_at: string
+          id: string
+          languages: string[] | null
+          logo: string | null
+          name: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          categories?: string[] | null
+          country?: string | null
+          created_at?: string
+          id: string
+          languages?: string[] | null
+          logo?: string | null
+          name: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          categories?: string[] | null
+          country?: string | null
+          created_at?: string
+          id?: string
+          languages?: string[] | null
+          logo?: string | null
+          name?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      programs: {
+        Row: {
+          category: string | null
+          channel_id: string
+          created_at: string
+          description: string | null
+          end_time: string
+          id: string
+          is_live: boolean | null
+          start_time: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          channel_id: string
+          created_at?: string
+          description?: string | null
+          end_time: string
+          id: string
+          is_live?: boolean | null
+          start_time: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          channel_id?: string
+          created_at?: string
+          description?: string | null
+          end_time?: string
+          id?: string
+          is_live?: boolean | null
+          start_time?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

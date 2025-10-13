@@ -1,6 +1,13 @@
-import { Search, Heart, Tv } from 'lucide-react';
+import { Search, Heart, Tv, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+<<<<<<< HEAD
 import { ModeToggle } from '@/components/theme-toggle';
+=======
+import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+>>>>>>> 28f7540cea0c6752b27c4597b1f1c0e7b07dc221
 
 interface HeaderProps {
   searchQuery: string;
@@ -9,6 +16,40 @@ interface HeaderProps {
 }
 
 export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderProps) => {
+  const [isUpdating, setIsUpdating] = useState(false);
+  const { toast } = useToast();
+
+  const handleReloadEPG = async () => {
+    setIsUpdating(true);
+    toast({
+      title: "Mise à jour EPG",
+      description: "Téléchargement et mise à jour des données...",
+    });
+
+    try {
+      const { data, error } = await supabase.functions.invoke('populate-epg-data');
+      
+      if (error) throw error;
+
+      toast({
+        title: "✅ EPG mis à jour",
+        description: `${data.channelsCount} chaînes et ${data.programsCount} programmes chargés`,
+      });
+      
+      window.location.reload();
+    } catch (error) {
+      console.error('Error refreshing EPG:', error);
+      toast({
+        title: "Erreur",
+        description: "Échec de la mise à jour EPG",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border">
       <div className="container mx-auto px-4 py-4">
@@ -36,6 +77,20 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderPr
           </div>
 
           <div className="flex items-center gap-2">
+<<<<<<< HEAD
+=======
+            <Button
+              onClick={handleReloadEPG}
+              disabled={isUpdating}
+              variant="outline"
+              size="sm"
+              className="gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isUpdating ? 'animate-spin' : ''}`} />
+              {isUpdating ? 'Mise à jour...' : 'MAJ EPG'}
+            </Button>
+
+>>>>>>> 28f7540cea0c6752b27c4597b1f1c0e7b07dc221
             <button className="relative p-2 rounded-lg hover:bg-card transition-colors">
               <Heart className="w-6 h-6 text-foreground" />
               {favoritesCount > 0 && (
@@ -44,7 +99,10 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderPr
                 </span>
               )}
             </button>
+<<<<<<< HEAD
             <ModeToggle />
+=======
+>>>>>>> 28f7540cea0c6752b27c4597b1f1c0e7b07dc221
           </div>
         </div>
       </div>
