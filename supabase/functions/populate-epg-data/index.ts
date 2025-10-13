@@ -180,7 +180,8 @@ serve(async (req) => {
         // Only keep current and upcoming programs (not past)
         if (endTime < now) continue;
 
-        const title = prog.title?.['#text'] || prog.title;
+        const titleNode = prog.title;
+        const title = typeof titleNode === 'object' ? titleNode['#text'] : titleNode;
         if (!title) continue;
 
         const description = prog.desc?.['#text'] || prog.desc || '';
