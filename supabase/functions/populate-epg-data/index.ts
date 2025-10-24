@@ -147,6 +147,7 @@ serve(async (req) => {
     }
   }
 
+  // @ts-ignore - EdgeRuntime is available in Supabase Edge Functions
   globalThis.EdgeRuntime?.waitUntil(processEPGData());
 
   return new Response(
