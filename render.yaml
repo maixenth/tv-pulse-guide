@@ -6,7 +6,7 @@ services:
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: ./backend/epg-generator
     # The build command copies our custom config files into the container
-    buildCommand: "cp ../../epg-config/* ./config/"
+    buildCommand: "cp epg-config/* backend/epg-generator/config/"
     startCommand: "php -S 0.0.0.0:10000 -t /var/data/xmltv"
     httpPort: 10000
     disks:
@@ -20,7 +20,7 @@ services:
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: ./backend/epg-generator
     # The build command copies our custom config files into the container
-    buildCommand: "cp ../../epg-config/* ./config/"
+    buildCommand: "cp epg-config/* backend/epg-generator/config/"
     command: "php manager.php export"
     disks:
       - name: epg-data
