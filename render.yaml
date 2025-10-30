@@ -5,7 +5,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: ./backend/epg-generator
-    startCommand: "php -S 0.0.0.0:10000 -t /var/data/xmltv"
+    startCommand: "php -S 0.0.0.0:10000 -t /var/data"
     httpPort: 10000
     healthCheckPath: /guide.xml
     disks:
@@ -18,7 +18,7 @@ services:
     schedule: "0 * * * *" # Every hour
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: ./backend/epg-generator
-    command: "php manager.php export --output=/var/data/xmltv"
+    command: "php manager.php export && mv xmltv/guide.xml /var/data/guide.xml"
     disks:
       - name: epg-data
         mountPath: /var/data
