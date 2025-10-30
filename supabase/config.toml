@@ -1,1 +1,7 @@
 project_id = "tiwajxnucxryusmrndpv"
+
+[functions.populate-epg-data]
+verify_jwt = false
+
+[functions.sync-channels]
+verify_jwt = false

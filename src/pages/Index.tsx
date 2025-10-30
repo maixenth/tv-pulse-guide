@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { toast } from 'sonner';
+import { RefreshCw } from 'lucide-react';
 
 // UI Components
 import { Header } from '@/components/Header';
@@ -109,6 +110,7 @@ const Index = () => {
   const [allPrograms, setAllPrograms] = useState<Program[]>([]);
   const [allChannels, setAllChannels] = useState<{ id: string; name: string; logo: string | null }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     const loadData = async () => {
@@ -223,6 +225,31 @@ const Index = () => {
     setDialogOpen(true);
   };
 
+  const handleSyncEPG = async () => {
+    setIsSyncing(true);
+    toast.info('Synchronisation des programmes en cours...');
+    
+    try {
+      const response = await supabase.functions.invoke('populate-epg-data', {
+        body: {},
+      });
+
+      if (response.error) throw response.error;
+
+      toast.success('Synchronisation réussie ! Rechargement des données...');
+      
+      // Recharger les données après la synchronisation
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    } catch (error) {
+      console.error('Erreur de synchronisation:', error);
+      toast.error('Erreur lors de la synchronisation des programmes');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <Header
@@ -263,10 +290,20 @@ const Index = () => {
                   onDateChange={setSelectedDate}
                 />
               </div>
-              <ToggleGroup type="single" value={viewMode} onValueChange={(value) => value && setViewMode(value as any)}>
-                <ToggleGroupItem value="grid">Grille</ToggleGroupItem>
-                <ToggleGroupItem value="timeline">Timeline</ToggleGroupItem>
-              </ToggleGroup>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSyncEPG}
+                  disabled={isSyncing}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} />
+                  {isSyncing ? 'Synchronisation...' : 'Sync EPG'}
+                </button>
+                <ToggleGroup type="single" value={viewMode} onValueChange={(value) => value && setViewMode(value as any)}>
+                  <ToggleGroupItem value="grid">Grille</ToggleGroupItem>
+                  <ToggleGroupItem value="timeline">Timeline</ToggleGroupItem>
+                </ToggleGroup>
+              </div>
             </div>
 
             <div className="mb-6">
