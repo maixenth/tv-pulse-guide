@@ -1,0 +1,16 @@
+{
+  "name": "programmes-tv-backend",
+  "version": "1.0.0",
+  "description": "Backend service to update EPG data.",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "express": "^5.1.0",
+    "node-cron": "^3.0.3",
+    "pako": "^2.1.0"
+  }
+}

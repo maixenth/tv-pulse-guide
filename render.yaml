@@ -1,0 +1,23 @@
+services:
+  # Web Service to serve the generated EPG file
+  - type: web
+    name: epg-server
+    runtime: docker
+    repo: https://github.com/maixenth/tv-pulse-guide.git # Will be auto-filled by Render
+    dockerfilePath: ./backend/epg-generator/Dockerfile
+    dockerContext: ./backend/epg-generator
+    # Command to start a simple web server to serve the file
+    startCommand: "php -S 0.0.0.0:10000 -t xmltv"
+    httpPort: 10000
+    healthCheckPath: /guide.xml
+    envVars:
+      - key: TZ
+        value: Europe/Paris
+
+  # Cron Job to generate the EPG file
+  - type: cron
+    name: epg-generator
+    schedule: "0 * * * *" # Every hour
+    dockerfilePath: ./backend/epg-generator/Dockerfile
+    dockerContext: ./backend/epg-generator
+    command: "php manager.php export"

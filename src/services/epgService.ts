@@ -80,7 +80,7 @@ const getLogoUrl = (channelName: string): string | null => {
 
 // --- Main Service Function ---
 export const fetchAndProcessEpg = async (): Promise<{ channels: { id: string; name: string; logo: string | null }[], programs: Program[] }> => {
-  const guideUrl = '/epg/guide.xml';
+  const guideUrl = import.meta.env.VITE_EPG_API_URL || 'http://localhost:10000/guide.xml';
   try {
     const response = await fetch(guideUrl);
     if (!response.ok) {

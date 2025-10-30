@@ -128,7 +128,6 @@ const Index = () => {
     };
 
     loadData();
-    // No interval here, the update is handled by the external scheduler
   }, []);
 
   const availableChannels = useMemo(() => {

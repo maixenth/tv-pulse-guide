@@ -8,6 +8,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    proxy: {
+      '/epg': {
+        target: 'http://xmltv.xmltv.fr',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/epg/, ''),
+      },
+    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
