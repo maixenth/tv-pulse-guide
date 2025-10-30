@@ -5,9 +5,10 @@ services:
     runtime: docker
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: ./backend/epg-generator
-    startCommand: "php -S 0.0.0.0:10000 -t /var/data"
+    # The build command copies our custom config files into the container
+    buildCommand: "cp ../../epg-config/* ./config/"
+    startCommand: "php -S 0.0.0.0:10000 -t /var/data/xmltv"
     httpPort: 10000
-    healthCheckPath: /guide.xml
     disks:
       - name: epg-data
         mountPath: /var/data
@@ -18,7 +19,9 @@ services:
     schedule: "0 * * * *" # Every hour
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: ./backend/epg-generator
-    command: "php manager.php export && mv xmltv/guide.xml /var/data/guide.xml"
+    # The build command copies our custom config files into the container
+    buildCommand: "cp ../../epg-config/* ./config/"
+    command: "php manager.php export"
     disks:
       - name: epg-data
         mountPath: /var/data
@@ -26,3 +29,4 @@ services:
 disks:
   - name: epg-data
     sizeGB: 1
+

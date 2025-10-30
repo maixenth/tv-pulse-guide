@@ -1,0 +1,13 @@
+{
+  "days": 2,
+  "output_path": "/var/data/xmltv/",
+  "delete_raw_xml": true,
+  "enable_gz": false,
+  "enable_zip": false,
+  "guides_to_generate": [
+    {
+      "channels": "/app/config/channels.json",
+      "filename": "guide.xml"
+    }
+  ]
+}
