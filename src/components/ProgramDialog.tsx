@@ -1,4 +1,4 @@
-import { Program, categoryColors } from '@/types/program';
+import { Program, categoryGradientColors } from '@/types/program';
 import {
   Dialog,
   DialogContent,
@@ -30,7 +30,7 @@ export const ProgramDialog = ({ program, open, onOpenChange }: ProgramDialogProp
           <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent" />
           
           <div className="absolute bottom-4 left-4 right-4">
-            <Badge className={`bg-gradient-to-r ${categoryColors[program.category]} mb-2`}>
+            <Badge className={`bg-gradient-to-r ${categoryGradientColors[program.category]} mb-2`}>
               {program.category}
             </Badge>
             {program.isLive && (

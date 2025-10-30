@@ -67,8 +67,20 @@ try {
 
   const getLogoUrl = (channelName) => {
     if (!channelName) return null;
+
+    const countryExceptions = {
+      '2M Maroc': { country: 'morocco', suffix: 'ma' },
+      // Add other exceptions here as needed
+    };
+
+    const exception = countryExceptions[channelName];
     const slug = slugify(channelName);
-    // Assuming most channels are French for this specific EPG
+
+    if (exception) {
+      return `https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/${exception.country}/${slug}-${exception.suffix}.png`;
+    }
+
+    // Default to France
     return `https://raw.githubusercontent.com/tv-logo/tv-logos/main/countries/france/${slug}-fr.png`;
   };
 

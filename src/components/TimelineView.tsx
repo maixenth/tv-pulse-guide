@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { Program, categoryColors } from '@/types/program';
+import { Program, categoryBgColors } from '@/types/program';
 import {
   Tooltip,
   TooltipContent,
@@ -109,14 +109,13 @@ export const TimelineView = ({ programs, onProgramClick }: TimelineViewProps) =>
                     {track.map(program => {
                       const left = timeToMinutes(program.startTime) * PIXELS_PER_MINUTE;
                       const width = program.duration * PIXELS_PER_MINUTE;
-                      const categoryColor = categoryColors[program.category] || 'from-gray-500 to-gray-600';
-
+                      
                       return (
                         <TooltipProvider key={program.id}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div
-                                className={`absolute top-1 bottom-1 flex items-center justify-center p-1 rounded ${categoryColors[program.category] || 'bg-gray-600'} text-white text-xs font-semibold overflow-hidden shadow-sm cursor-pointer`}
+                                className={`absolute top-1 bottom-1 flex items-center justify-center p-1 rounded ${categoryBgColors[program.category] || 'bg-gray-600'} text-white text-xs font-semibold overflow-hidden shadow-sm cursor-pointer`}
                                 style={{ left: `${left}px`, width: `${width}px` }}
                                 onClick={() => onProgramClick(program)}
                               >

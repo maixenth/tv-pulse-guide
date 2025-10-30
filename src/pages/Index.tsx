@@ -14,9 +14,6 @@ import { TimelineView } from '@/components/TimelineView';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 // EPG Service
-import { fetchPreparedData } from '@/services/epgService';
-
-// Types
 import { Program, ProgramCategory } from '@/types/program';
 
 const VirtualizedGrid = ({ programs, favorites, onToggleFavorite, onProgramClick }) => {
@@ -97,7 +94,7 @@ const VirtualizedGrid = ({ programs, favorites, onToggleFavorite, onProgramClick
 const Index = () => {
   // State for UI controls
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<ProgramCategory | 'Tous'>('Tous');
+  const [selectedCategory, setSelectedCategory] = useState<'Tous' | Program['category']>('Tous');
   const [selectedChannel, setSelectedChannel] = useState('all');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -109,16 +106,21 @@ const Index = () => {
 
   // State for data fetching
   const [allPrograms, setAllPrograms] = useState<Program[]>([]);
-  const [allChannels, setAllChannels] = useState<{ id: string; name: string; logo: string }[]>([]);
+  const [allChannels, setAllChannels] = useState<{ id: string; name: string; logo: string | null }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const loadData = async () => {
+    const fetchEpgData = async () => {
+      console.log('Fetching EPG data...');
+      setIsLoading(true);
       try {
-        setIsLoading(true);
-        const data = await fetchPreparedData();
-        setAllChannels(data.channels || []);
+        const response = await fetch('http://localhost:3001/api/epg');
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
         setAllPrograms(data.programs || []);
+        setAllChannels(data.channels || []);
         toast.success(`${data.channels.length} chaînes et ${data.programs.length} programmes chargés !`);
       } catch (error) {
         toast.error('Erreur lors du chargement des données.');
@@ -127,7 +129,12 @@ const Index = () => {
         setIsLoading(false);
       }
     };
-    loadData();
+
+    fetchEpgData(); // Initial fetch
+
+    const intervalId = setInterval(fetchEpgData, 3600000); // Fetch every hour
+
+    return () => clearInterval(intervalId); // Cleanup on unmount
   }, []);
 
   const availableChannels = useMemo(() => {

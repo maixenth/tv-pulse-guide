@@ -1,4 +1,4 @@
-import { ProgramCategory, categoryColors } from '@/types/program';
+import { ProgramCategory, categoryGradientColors } from '@/types/program';
 import { Badge } from '@/components/ui/badge';
 
 interface CategoryFilterProps {
@@ -33,7 +33,7 @@ export const CategoryFilter = ({
               variant={selectedCategory === category ? 'default' : 'outline'}
               className={`cursor-pointer whitespace-nowrap px-5 py-2.5 transition-all font-semibold text-sm ${
                 selectedCategory === category
-                  ? `bg-gradient-to-r ${categoryColors[category]} shadow-lg hover:shadow-xl scale-105`
+                  ? `bg-gradient-to-r ${categoryGradientColors[category]} shadow-lg hover:shadow-xl scale-105`
                   : 'hover:bg-card hover:border-primary/50 hover:scale-105'
               }`}
               onClick={() => onCategoryChange(category)}

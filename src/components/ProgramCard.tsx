@@ -1,4 +1,4 @@
-import { Program, categoryColors } from '@/types/program';
+import { Program, categoryBgColors, categoryGradientColors } from '@/types/program';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Heart, Clock, Tv2 } from 'lucide-react';
@@ -20,7 +20,8 @@ export const ProgramCard = ({
   console.log('ProgramCard props:', { program });
   const [imageError, setImageError] = useState(false);
 
-  const categoryColor = categoryColors[program.category] || 'from-gray-500 to-gray-600';
+  const categoryBgColor = categoryBgColors[program.category] || 'bg-slate-700';
+  const categoryGradientColor = categoryGradientColors[program.category] || 'from-gray-500 to-gray-600';
 
   return (
     <Card 
@@ -36,7 +37,7 @@ export const ProgramCard = ({
           onError={() => setImageError(true)}
         />
       ) : (
-        <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${categoryColor} opacity-20`}></div>
+        <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${categoryGradientColor} opacity-20`}></div>
       )}
 
       {/* Gradient Overlay */}
@@ -45,7 +46,7 @@ export const ProgramCard = ({
       {/* Content */}
       <div className="relative p-4 text-white space-y-2 z-10">
         <div className="flex justify-between items-start">
-          <Badge className={`bg-gradient-to-r ${categoryColor} text-white border-none shadow-lg backdrop-blur-sm`}>
+          <Badge className={`${categoryBgColor} text-white border-none shadow-lg`}>
             {program.category}
           </Badge>
           {program.isLive && (
