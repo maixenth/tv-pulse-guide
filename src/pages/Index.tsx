@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { toast } from 'sonner';
 
 // UI Components
@@ -9,43 +10,86 @@ import { ProgramDialog } from '@/components/ProgramDialog';
 import { ChannelSelector } from '@/components/ChannelSelector';
 import { DateFilter } from '@/components/DateFilter';
 import { Stats } from '@/components/Stats';
+import { TimelineView } from '@/components/TimelineView';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
-// EPG Service and Types
-import { fetchTvGuide } from '@/services/epgService';
-import { Channel, Programme as EpgProgramme, XmlText } from '@/types';
+// EPG Service
+import { fetchPreparedData } from '@/services/epgService';
 
-// Custom Program types for our application
+// Types
 import { Program, ProgramCategory } from '@/types/program';
 
-// Helper to extract text from XML parser's output
-const getText = (xmlText: XmlText): string => {
-  if (typeof xmlText === 'string') return xmlText;
-  if (xmlText && typeof xmlText === 'object' && '#text' in xmlText) return xmlText['#text'];
-  return '';
-};
+const VirtualizedGrid = ({ programs, favorites, onToggleFavorite, onProgramClick }) => {
+  const parentRef = useRef(null);
 
-// Helper to parse EPG's specific date format (YYYYMMDDHHMMSS)
-const parseEpgDate = (dateString: string): Date => {
-  const year = parseInt(dateString.substring(0, 4), 10);
-  const month = parseInt(dateString.substring(4, 6), 10) - 1; // Month is 0-indexed
-  const day = parseInt(dateString.substring(6, 8), 10);
-  const hour = parseInt(dateString.substring(8, 10), 10);
-  const minute = parseInt(dateString.substring(10, 12), 10);
-  const second = parseInt(dateString.substring(12, 14), 10);
-  return new Date(year, month, day, hour, minute, second);
-};
+  const getColumnCount = () => {
+    if (typeof window === 'undefined') return 1;
+    if (window.innerWidth >= 1280) return 4;
+    if (window.innerWidth >= 1024) return 3;
+    if (window.innerWidth >= 768) return 2;
+    return 1;
+  };
 
-// Map EPG categories to our app categories
-const mapEPGCategory = (epgCategory: string): ProgramCategory => {
-  if (!epgCategory) return 'Divertissement';
-  const cat = epgCategory.toLowerCase();
-  if (cat.includes('sport')) return 'Sport';
-  if (cat.includes('film') || cat.includes('movie') || cat.includes('cinéma')) return 'Cinéma';
-  if (cat.includes('série') || cat.includes('series')) return 'Séries';
-  if (cat.includes('news') || cat.includes('info') || cat.includes('actualité')) return 'Actualités';
-  if (cat.includes('enfant') || cat.includes('jeunesse') || cat.includes('kids')) return 'Enfants';
-  if (cat.includes('documentaire') || cat.includes('documentary')) return 'Documentaires';
-  return 'Divertissement';
+  const [columnCount, setColumnCount] = useState(getColumnCount());
+
+  useEffect(() => {
+    const handleResize = () => setColumnCount(getColumnCount());
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const rowCount = Math.ceil(programs.length / columnCount);
+
+  const rowVirtualizer = useVirtualizer({
+    count: rowCount,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 296, // h-[280px] + gap-4 (1rem = 16px)
+    overscan: 5,
+  });
+
+  return (
+    <div ref={parentRef} style={{ height: 'calc(100vh - 250px)', overflow: 'auto' }}>
+      <div
+        style={{
+          height: `${rowVirtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
+      >
+        {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+          const startIndex = virtualRow.index * columnCount;
+          const endIndex = Math.min(startIndex + columnCount, programs.length);
+          const rowPrograms = programs.slice(startIndex, endIndex);
+
+          return (
+            <div
+              key={virtualRow.key}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: `${virtualRow.size}px`,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 px-4">
+                {rowPrograms.map(program => (
+                  <ProgramCard
+                    key={program.id}
+                    program={program}
+                    isFavorite={favorites.has(program.id)}
+                    onToggleFavorite={onToggleFavorite}
+                    onClick={onProgramClick}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 };
 
 const Index = () => {
@@ -55,26 +99,27 @@ const Index = () => {
   const [selectedChannel, setSelectedChannel] = useState('all');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
+  const [viewMode, setViewMode] = useState<'grid' | 'timeline'>('grid');
 
   // State for program dialog
   const [selectedProgram, setSelectedProgram] = useState<Program | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // State for data fetching
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [epgPrograms, setEpgPrograms] = useState<EpgProgramme[]>([]);
+  const [allPrograms, setAllPrograms] = useState<Program[]>([]);
+  const [allChannels, setAllChannels] = useState<{ id: string; name: string; logo: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const guide = await fetchTvGuide();
-        setChannels(guide.tv.channel || []);
-        setEpgPrograms(guide.tv.programme || []);
-        toast.success(`${guide.tv.channel.length} chaînes et ${guide.tv.programme.length} programmes chargés !`);
+        const data = await fetchPreparedData();
+        setAllChannels(data.channels || []);
+        setAllPrograms(data.programs || []);
+        toast.success(`${data.channels.length} chaînes et ${data.programs.length} programmes chargés !`);
       } catch (error) {
-        toast.error('Erreur lors du chargement du guide TV.');
+        toast.error('Erreur lors du chargement des données.');
         console.error(error);
       } finally {
         setIsLoading(false);
@@ -84,8 +129,8 @@ const Index = () => {
   }, []);
 
   const availableChannels = useMemo(() => {
-    return channels.map(ch => getText(ch['display-name'])).sort();
-  }, [channels]);
+    return allChannels.map(ch => ch.name).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  }, [allChannels]);
 
   const categories: ProgramCategory[] = [
     'Sport',
@@ -97,35 +142,12 @@ const Index = () => {
     'Enfants',
   ];
 
-  // Convert EPG programs to our Program format
-  const programs: Program[] = useMemo(() => {
-    const channelMap = new Map(channels.map(ch => [ch['@_id'], ch]));
+    const filteredPrograms = useMemo(() => {
+    const formattedSelectedDate = selectedDate.toLocaleDateString('fr-FR');
 
-    return epgPrograms.map((epgProgram, index) => {
-      const channelId = epgProgram['@_channel'];
-      const channel = channelMap.get(channelId);
-      const now = new Date();
-      const startDate = parseEpgDate(epgProgram['@_start']);
-      const endDate = parseEpgDate(epgProgram['@_stop']);
+    return allPrograms.filter((program) => {
+      const matchesDate = program.date === formattedSelectedDate;
 
-      return {
-        id: `${channelId}-${epgProgram['@_start']}-${index}`,
-        title: getText(epgProgram.title),
-        channel: channel ? getText(channel['display-name']) : 'Inconnu',
-        category: mapEPGCategory(getText(epgProgram.desc)), // Using desc for category as it's often more descriptive
-        date: startDate.toLocaleDateString('fr-FR'),
-        startTime: startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        endTime: endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-        description: getText(epgProgram.desc),
-        image: channel?.icon?.['@_src'] || '',
-        isLive: now >= startDate && now <= endDate,
-        duration: Math.round((endDate.getTime() - startDate.getTime()) / 60000),
-      };
-    });
-  }, [epgPrograms, channels]);
-
-  const filteredPrograms = useMemo(() => {
-    return programs.filter((program) => {
       const matchesCategory =
         selectedCategory === 'Tous' || program.category === selectedCategory;
       
@@ -137,13 +159,13 @@ const Index = () => {
         program.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         program.channel.toLowerCase().includes(searchQuery.toLowerCase());
 
-      return matchesCategory && matchesChannel && matchesSearch;
+      return matchesDate && matchesCategory && matchesChannel && matchesSearch;
     });
-  }, [programs, searchQuery, selectedCategory, selectedChannel]);
+  }, [allPrograms, searchQuery, selectedCategory, selectedChannel, selectedDate]);
 
   const liveProgramsCount = useMemo(() => {
-    return programs.filter(p => p.isLive).length;
-  }, [programs]);
+    return 0; // Simplified for now
+  }, []);
 
   const toggleFavorite = (id: string) => {
     setFavorites((prev) => {
@@ -186,20 +208,26 @@ const Index = () => {
           <>
             <Stats 
               totalChannels={availableChannels.length}
-              totalPrograms={programs.length}
+              totalPrograms={allPrograms.length}
               livePrograms={liveProgramsCount}
             />
 
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <ChannelSelector
-                channels={availableChannels}
-                selectedChannel={selectedChannel}
-                onChannelChange={setSelectedChannel}
-              />
-              <DateFilter
-                selectedDate={selectedDate}
-                onDateChange={setSelectedDate}
-              />
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-6">
+              <div className="flex flex-col sm:flex-row gap-4">
+                <ChannelSelector
+                  channels={availableChannels}
+                  selectedChannel={selectedChannel}
+                  onChannelChange={setSelectedChannel}
+                />
+                <DateFilter
+                  selectedDate={selectedDate}
+                  onDateChange={setSelectedDate}
+                />
+              </div>
+              <ToggleGroup type="single" value={viewMode} onValueChange={(value) => value && setViewMode(value as any)}>
+                <ToggleGroupItem value="grid">Grille</ToggleGroupItem>
+                <ToggleGroupItem value="timeline">Timeline</ToggleGroupItem>
+              </ToggleGroup>
             </div>
 
             <div className="mb-6">
@@ -218,17 +246,11 @@ const Index = () => {
                 <p className="text-sm text-muted-foreground">Essayez de modifier vos filtres.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredPrograms.map((program) => (
-                  <ProgramCard
-                    key={program.id}
-                    program={program}
-                    isFavorite={favorites.has(program.id)}
-                    onToggleFavorite={toggleFavorite}
-                    onClick={handleProgramClick}
-                  />
-                ))}
-              </div>
+              viewMode === 'grid' ? (
+                <VirtualizedGrid programs={filteredPrograms} favorites={favorites} onToggleFavorite={toggleFavorite} onProgramClick={handleProgramClick} />
+              ) : (
+                <TimelineView programs={filteredPrograms} onProgramClick={handleProgramClick} />
+              )
             )}
           </>
         )}

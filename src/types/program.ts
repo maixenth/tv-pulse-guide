@@ -23,11 +23,11 @@ export interface Program {
 }
 
 export const categoryColors: Record<ProgramCategory, string> = {
-  'Sport': 'from-green-500 to-emerald-600',
-  'Cinéma': 'from-red-500 to-rose-600',
-  'Séries': 'from-purple-500 to-violet-600',
-  'Actualités': 'from-blue-500 to-cyan-600',
-  'Divertissement': 'from-yellow-500 to-orange-600',
-  'Documentaires': 'from-teal-500 to-cyan-600',
-  'Enfants': 'from-pink-500 to-fuchsia-600',
+  'Sport': 'bg-green-600',
+  'Cinéma': 'bg-red-600',
+  'Séries': 'bg-purple-600',
+  'Actualités': 'bg-blue-600',
+  'Divertissement': 'bg-slate-600',
+  'Documentaires': 'bg-teal-600',
+  'Enfants': 'bg-pink-600',
 };

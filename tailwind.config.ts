@@ -1,8 +1,19 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
   darkMode: ["class"],
   content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  safelist: [
+    'bg-green-600',
+    'bg-red-600',
+    'bg-purple-600',
+    'bg-blue-600',
+    'bg-slate-600',
+    'bg-teal-600',
+    'bg-pink-600',
+    'bg-gray-600',
+  ],
   prefix: "",
   theme: {
     container: {
@@ -87,5 +98,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 } satisfies Config;

@@ -25,7 +25,7 @@ export const ChannelSelector = ({
         <SelectTrigger className="w-[200px] bg-card border-border">
           <SelectValue placeholder="Toutes les chaînes" />
         </SelectTrigger>
-        <SelectContent className="bg-card border-border">
+        <SelectContent className="bg-card border-border max-h-[300px] overflow-y-auto">
           <SelectItem value="all">Toutes les chaînes</SelectItem>
           {channels.map((channel) => (
             <SelectItem key={channel} value={channel}>
