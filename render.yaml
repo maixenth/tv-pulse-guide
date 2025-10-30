@@ -4,7 +4,7 @@ services:
     name: epg-server
     runtime: docker
     dockerfilePath: ./backend/epg-generator/Dockerfile
-    dockerContext: ./backend/epg-generator
+    dockerContext: .
     startCommand: "php -S 0.0.0.0:10000 -t /var/data/xmltv"
     httpPort: 10000
     disks:
@@ -16,7 +16,7 @@ services:
     name: epg-generator
     schedule: "0 * * * *" # Every hour
     dockerfilePath: ./backend/epg-generator/Dockerfile
-    dockerContext: ./backend/epg-generator
+    dockerContext: .
     command: "php manager.php export"
     disks:
       - name: epg-data
