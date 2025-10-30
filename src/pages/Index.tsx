@@ -15,7 +15,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 // EPG Service
 import { Program, ProgramCategory } from '@/types/program';
-import { fetchAndProcessEpg } from '@/services/epgService';
+import { supabase } from '@/integrations/supabase/client';
 
 const VirtualizedGrid = ({ programs, favorites, onToggleFavorite, onProgramClick }) => {
   const parentRef = useRef(null);
@@ -112,16 +112,53 @@ const Index = () => {
 
   useEffect(() => {
     const loadData = async () => {
-      console.log('Fetching and processing EPG data...');
+      console.log('Chargement des chaînes depuis Supabase...');
       setIsLoading(true);
       try {
-        const data = await fetchAndProcessEpg();
-        setAllPrograms(data.programs);
-        setAllChannels(data.channels);
-        toast.success(`${data.channels.length} chaînes et ${data.programs.length} programmes chargés !`);
+        // Charger les chaînes
+        const { data: channelsData, error: channelsError } = await supabase
+          .from('channels')
+          .select('id, name, logo')
+          .order('name');
+
+        if (channelsError) throw channelsError;
+
+        // Charger les programmes
+        const { data: programsData, error: programsError } = await supabase
+          .from('programs')
+          .select('*')
+          .order('start_time');
+
+        if (programsError) throw programsError;
+
+        // Transformer les programmes au format attendu
+        const transformedPrograms: Program[] = (programsData || []).map(prog => {
+          const startDate = new Date(prog.start_time);
+          const endDate = new Date(prog.end_time);
+          const channelInfo = channelsData?.find(ch => ch.id === prog.channel_id);
+
+          return {
+            id: prog.id,
+            title: prog.title,
+            channel: channelInfo?.name || prog.channel_id,
+            category: (prog.category || 'Divertissement') as ProgramCategory,
+            date: startDate.toLocaleDateString('fr-FR'),
+            startTime: startDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            endTime: endDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+            description: prog.description || '',
+            image: channelInfo?.logo || null,
+            duration: Math.round((endDate.getTime() - startDate.getTime()) / 60000),
+            isLive: prog.is_live || false,
+            actors: [],
+          };
+        });
+
+        setAllPrograms(transformedPrograms);
+        setAllChannels(channelsData || []);
+        toast.success(`${channelsData?.length || 0} chaînes et ${transformedPrograms.length} programmes chargés !`);
       } catch (error) {
-        toast.error('Erreur lors du chargement des données du guide.');
-        console.error(error);
+        toast.error('Erreur lors du chargement des données.');
+        console.error('Erreur:', error);
       } finally {
         setIsLoading(false);
       }
