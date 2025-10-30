@@ -5,8 +5,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: .
-    # We override the default CMD to start a web server
-    entrypoint: "php -S 0.0.0.0:10000 -t /var/data/xmltv"
+    dockerCommand: "php -S 0.0.0.0:10000 -t /var/data/xmltv"
     httpPort: 10000
     disks:
       - name: epg-data
@@ -18,8 +17,7 @@ services:
     schedule: "0 * * * *" # Every hour
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: .
-    # We specify the command to run for the cron job
-    command: "php manager.php export"
+    dockerCommand: "mkdir -p /var/data/xmltv && php manager.php export"
     disks:
       - name: epg-data
         mountPath: /var/data
