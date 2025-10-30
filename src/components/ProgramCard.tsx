@@ -81,6 +81,8 @@ export const ProgramCard = ({
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Clock className="w-4 h-4" />
+          <span>{program.date}</span>
+          <span>•</span>
           <span>{program.startTime} - {program.endTime}</span>
           <span>•</span>
           <span>{program.duration} min</span>

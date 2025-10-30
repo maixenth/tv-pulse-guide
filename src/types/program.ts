@@ -12,6 +12,7 @@ export interface Program {
   title: string;
   channel: string;
   category: ProgramCategory;
+  date: string;
   startTime: string;
   endTime: string;
   description: string;
