@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      channel_sync_history: {
+        Row: {
+          channels_synced: number | null
+          error_message: string | null
+          id: string
+          status: string | null
+          sync_completed_at: string | null
+          sync_started_at: string | null
+        }
+        Insert: {
+          channels_synced?: number | null
+          error_message?: string | null
+          id?: string
+          status?: string | null
+          sync_completed_at?: string | null
+          sync_started_at?: string | null
+        }
+        Update: {
+          channels_synced?: number | null
+          error_message?: string | null
+          id?: string
+          status?: string | null
+          sync_completed_at?: string | null
+          sync_started_at?: string | null
+        }
+        Relationships: []
+      }
       channels: {
         Row: {
           categories: string[] | null
@@ -94,7 +121,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      sync_channels_cron: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
