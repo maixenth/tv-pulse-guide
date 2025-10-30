@@ -15,6 +15,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 
 // EPG Service
 import { Program, ProgramCategory } from '@/types/program';
+import { fetchAndProcessEpg } from '@/services/epgService';
 
 const VirtualizedGrid = ({ programs, favorites, onToggleFavorite, onProgramClick }) => {
   const parentRef = useRef(null);
@@ -110,31 +111,24 @@ const Index = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const fetchEpgData = async () => {
-      console.log('Fetching EPG data...');
+    const loadData = async () => {
+      console.log('Fetching and processing EPG data...');
       setIsLoading(true);
       try {
-        const response = await fetch('http://localhost:3001/api/epg');
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        setAllPrograms(data.programs || []);
-        setAllChannels(data.channels || []);
+        const data = await fetchAndProcessEpg();
+        setAllPrograms(data.programs);
+        setAllChannels(data.channels);
         toast.success(`${data.channels.length} chaînes et ${data.programs.length} programmes chargés !`);
       } catch (error) {
-        toast.error('Erreur lors du chargement des données.');
+        toast.error('Erreur lors du chargement des données du guide.');
         console.error(error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    fetchEpgData(); // Initial fetch
-
-    const intervalId = setInterval(fetchEpgData, 3600000); // Fetch every hour
-
-    return () => clearInterval(intervalId); // Cleanup on unmount
+    loadData();
+    // No interval here, the update is handled by the external scheduler
   }, []);
 
   const availableChannels = useMemo(() => {
