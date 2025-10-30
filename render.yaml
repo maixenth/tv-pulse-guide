@@ -5,13 +5,12 @@ services:
     runtime: docker
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: ./backend/epg-generator
-    # Command to start a simple web server to serve the file
-    startCommand: "cd /app && php -S 0.0.0.0:10000 -t xmltv"
+    startCommand: "php -S 0.0.0.0:10000 -t /var/data/xmltv"
     httpPort: 10000
     healthCheckPath: /guide.xml
-    envVars:
-      - key: TZ
-        value: Europe/Paris
+    disks:
+      - name: epg-data
+        mountPath: /var/data
 
   # Cron Job to generate the EPG file
   - type: cron
@@ -19,4 +18,11 @@ services:
     schedule: "0 * * * *" # Every hour
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: ./backend/epg-generator
-    command: "cd /app && php manager.php export"
+    command: "php manager.php export --output=/var/data/xmltv"
+    disks:
+      - name: epg-data
+        mountPath: /var/data
+
+disks:
+  - name: epg-data
+    sizeGB: 1
