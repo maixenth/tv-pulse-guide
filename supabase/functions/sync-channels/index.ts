@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.75.0';
 
 const corsHeaders = {
@@ -113,10 +112,11 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Error in sync-channels:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
       JSON.stringify({
         success: false,
-        error: error.message,
+        error: errorMessage,
         timestamp: new Date().toISOString(),
       }),
       {
