@@ -24,7 +24,7 @@ export const ProgramCard = ({
 
   return (
     <Card 
-      className="group cursor-pointer overflow-hidden relative border-border bg-card/50 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl flex flex-col justify-end h-[280px]"
+      className="group cursor-pointer overflow-hidden relative glassmorphism card-hover flex flex-col justify-end h-[280px] animate-scale-in"
       onClick={() => onClick(program)}
     >
       {/* Background Image */}
@@ -45,17 +45,17 @@ export const ProgramCard = ({
       {/* Content */}
       <div className="relative p-4 text-white space-y-2 z-10">
         <div className="flex justify-between items-start">
-          <Badge className={`bg-gradient-to-r ${categoryColor} text-white border-none shadow-lg`}>
+          <Badge className={`bg-gradient-to-r ${categoryColor} text-white border-none shadow-lg backdrop-blur-sm`}>
             {program.category}
           </Badge>
           {program.isLive && (
-            <Badge className="bg-red-500 animate-pulse border-none shadow-lg">
+            <Badge className="bg-gradient-to-r from-red-500 to-red-600 animate-pulse border-none shadow-lg shadow-red-500/50">
               ● EN DIRECT
             </Badge>
           )}
         </div>
 
-        <h3 className="font-bold text-xl line-clamp-2 text-white group-hover:text-primary transition-colors">
+        <h3 className="font-bold text-xl line-clamp-2 text-white group-hover:text-primary transition-all duration-300 drop-shadow-lg">
           {program.title}
         </h3>
 

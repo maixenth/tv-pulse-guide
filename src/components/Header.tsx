@@ -47,27 +47,27 @@ export const Header = ({ searchQuery, onSearchChange, favoritesCount }: HeaderPr
   };
 
   return (
-    <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/80 border-b border-border">
+    <header className="sticky top-0 z-50 backdrop-blur-xl bg-background/90 border-b border-border/50 shadow-lg">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary">
-              <Tv className="w-6 h-6 text-white" />
+            <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-br from-primary via-accent to-secondary shadow-lg shadow-primary/30 animate-scale-in">
+              <Tv className="w-7 h-7 text-white drop-shadow-lg" />
             </div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            <h1 className="text-3xl font-bold gradient-text drop-shadow-sm">
               TV Guide
             </h1>
           </div>
 
           <div className="flex-1 max-w-xl">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+            <div className="relative group">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
               <Input
                 type="text"
                 placeholder="Rechercher un programme, une chaîne..."
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
-                className="pl-10 bg-card border-border focus:border-primary transition-colors"
+                className="pl-10 glassmorphism focus:ring-2 focus:ring-primary/50 transition-all"
               />
             </div>
           </div>

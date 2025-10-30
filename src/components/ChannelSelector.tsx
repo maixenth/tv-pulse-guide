@@ -20,12 +20,12 @@ export const ChannelSelector = ({
 }: ChannelSelectorProps) => {
   return (
     <div className="flex items-center gap-2">
-      <Tv2 className="w-5 h-5 text-muted-foreground" />
+      <Tv2 className="w-5 h-5 text-primary" />
       <Select value={selectedChannel} onValueChange={onChannelChange}>
-        <SelectTrigger className="w-[200px] bg-card border-border">
+        <SelectTrigger className="w-[200px] glassmorphism hover:border-primary/50 transition-all">
           <SelectValue placeholder="Toutes les chaînes" />
         </SelectTrigger>
-        <SelectContent className="bg-card border-border max-h-[300px] overflow-y-auto">
+        <SelectContent className="glassmorphism border-border/50 max-h-[300px] overflow-y-auto">
           <SelectItem value="all">Toutes les chaînes</SelectItem>
           {channels.map((channel) => (
             <SelectItem key={channel} value={channel}>
