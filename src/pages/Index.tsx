@@ -24,10 +24,12 @@ const VirtualizedGrid = ({ programs, favorites, onToggleFavorite, onProgramClick
 
   const getColumnCount = () => {
     if (typeof window === 'undefined') return 1;
-    if (window.innerWidth >= 1280) return 4;
-    if (window.innerWidth >= 1024) return 3;
-    if (window.innerWidth >= 768) return 2;
-    return 1;
+    if (window.innerWidth >= 1920) return 6;  // 6 colonnes sur très grands écrans
+    if (window.innerWidth >= 1536) return 5;  // 5 colonnes sur grands écrans
+    if (window.innerWidth >= 1280) return 4;  // 4 colonnes sur écrans larges
+    if (window.innerWidth >= 1024) return 3;  // 3 colonnes sur tablettes
+    if (window.innerWidth >= 640) return 2;   // 2 colonnes sur petits écrans
+    return 1;                                  // 1 colonne sur mobile
   };
 
   const [columnCount, setColumnCount] = useState(getColumnCount());
@@ -73,7 +75,7 @@ const VirtualizedGrid = ({ programs, favorites, onToggleFavorite, onProgramClick
                 transform: `translateY(${virtualRow.start}px)`,
               }}
             >
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 px-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-4">
                 {rowPrograms.map(program => (
                   <ProgramCard
                     key={program.id}
@@ -198,7 +200,7 @@ const Index = () => {
         onCategoryChange={setSelectedCategory}
       />
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-6 py-8 max-w-[2000px]">
         {isLoading ? (
           <div className="flex items-center justify-center py-16">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
