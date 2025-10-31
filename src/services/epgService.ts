@@ -80,7 +80,8 @@ const getLogoUrl = (channelName: string): string | null => {
 
 // --- Main Service Function ---
 export const fetchAndProcessEpg = async (): Promise<{ channels: { id: string; name: string; logo: string | null }[], programs: Program[] }> => {
-  const guideUrl = import.meta.env.VITE_EPG_API_URL || 'http://localhost:10000/guide.xml';
+  // En production, on utilise le proxy Vercel. En développement, l'URL directe.
+  const guideUrl = import.meta.env.PROD ? '/api/epg' : (import.meta.env.VITE_EPG_API_URL || 'http://localhost:10000/guide.xml');
   try {
     const response = await fetch(guideUrl);
     if (!response.ok) {
