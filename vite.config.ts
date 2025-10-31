@@ -8,20 +8,6 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
-    proxy: {
-      // Redirige les appels /api/epg vers le backend pour le développement local
-      '/api/epg': {
-        target: process.env.VITE_EPG_API_URL || 'http://localhost:10000',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/epg/, '/guide.xml'),
-      },
-      // Conserve le proxy existant si nécessaire pour d'autres appels
-      '/epg': {
-        target: 'http://xmltv.xmltv.fr',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/epg/, ''),
-      },
-    },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
   resolve: {
