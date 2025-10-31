@@ -7,7 +7,9 @@ services:
     dockerContext: .
     dockerCommand: "php -S 0.0.0.0:10000 -t /var/cache/render/xmltv"
     httpPort: 10000
-    previews: true # Enable cache
+    cache:
+      name: epg-cache
+      path: /var/cache/render
 
   # Cron Job to generate the EPG file
   - type: cron
@@ -16,5 +18,10 @@ services:
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: .
     dockerCommand: "mkdir -p /var/cache/render/xmltv && php manager.php export"
-    previews: true # Enable cache
+    cache:
+      name: epg-cache
+      path: /var/cache/render
+
+caches:
+  - name: epg-cache
 
