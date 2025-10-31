@@ -1,20 +1,19 @@
 services:
-  # Web Service to serve the generated EPG file
-  - type: web
-    name: epg-server
-    runtime: docker
+  - name: epg-server
+    type: web
+    env: docker
+    httpPort: 10000
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: .
     dockerCommand: "php -S 0.0.0.0:10000 -t /var/cache/render/xmltv"
-    httpPort: 10000
     cache:
       name: epg-cache
       path: /var/cache/render
 
-  # Cron Job to generate the EPG file
-  - type: cron
-    name: epg-generator
-    schedule: "0 * * * *" # Every hour
+  - name: epg-generator
+    type: cron
+    env: docker
+    schedule: "0 * * * *"
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: .
     dockerCommand: "mkdir -p /var/cache/render/xmltv && php manager.php export"
