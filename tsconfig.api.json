@@ -5,7 +5,8 @@
     "outDir": ".vercel/output/functions",
     "noEmit": false,
     "strict": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true
   },
   "include": ["api/**/*.ts"]
 }
