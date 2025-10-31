@@ -5,11 +5,9 @@ services:
     runtime: docker
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: .
-    dockerCommand: "php -S 0.0.0.0:10000 -t /var/data/xmltv"
+    dockerCommand: "php -S 0.0.0.0:10000 -t /var/cache/render/xmltv"
     httpPort: 10000
-    disks:
-      - name: epg-data
-        mountPath: /var/data
+    previews: true # Enable cache
 
   # Cron Job to generate the EPG file
   - type: cron
@@ -17,12 +15,6 @@ services:
     schedule: "0 * * * *" # Every hour
     dockerfilePath: ./backend/epg-generator/Dockerfile
     dockerContext: .
-    dockerCommand: "mkdir -p /var/data/xmltv && php manager.php export"
-    disks:
-      - name: epg-data
-        mountPath: /var/data
-
-disks:
-  - name: epg-data
-    sizeGB: 1
+    dockerCommand: "mkdir -p /var/cache/render/xmltv && php manager.php export"
+    previews: true # Enable cache
 
